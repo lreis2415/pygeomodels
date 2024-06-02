@@ -60,3 +60,8 @@ def get_task_status(task_id: str) -> Dict[str, Optional[Any]]:
     else:
         print('Get model metadata failed!\nError code: %d\n Error message: %s' % (resp['code'], resp['message']))
         return {}
+
+
+if __name__ == "__main__":
+    pass
+    

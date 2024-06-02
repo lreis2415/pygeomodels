@@ -24,7 +24,7 @@ def main():
 
     if task_id:
         task_resp = get_task_status(task_id)
-        if task_resp['success']:
+        if task_resp:
             print('Task status: %s' % task_resp['status'])
             print('Task log: %s' % task_resp['log'])
 

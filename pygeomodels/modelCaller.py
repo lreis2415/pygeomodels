@@ -4,10 +4,10 @@ from pygeomodels.api import submit_model_task
 
 
 class ModelCaller:
-    def __init__(self, metadata: Dict[str, Dict[str, Optional[Any]]]):
-        self.model_functions = self._generate_model_functions(metadata)
+    def __init__(self, base_url: str, metadata: Dict[str, Dict[str, Optional[Any]]]):
+        self.model_functions = self._generate_model_functions(base_url, metadata)
 
-    def _generate_model_functions(self, metadata):
+    def _generate_model_functions(self, base_url, metadata):
         model_functions = dict()
 
         for m_id in metadata.keys():
@@ -17,7 +17,7 @@ class ModelCaller:
                                    _params: Dict[str, Optional[Any]],
                                    _outputs: Dict[str, Optional[Any]],
                                    _taskname: str = '') -> Dict[str, Optional[Any]]:
-                    return submit_model_task(model_id, _inputs, _params, _outputs, _taskname)
+                    return submit_model_task(base_url, model_id, _inputs, _params, _outputs, _taskname)
 
                 return model_function
 

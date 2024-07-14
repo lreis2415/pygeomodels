@@ -3,8 +3,9 @@ from pygeomodels.modelCaller import ModelCaller
 
 
 class modelBank(object):
-    def __init__(self):
-        self.models_api_full = base_url + models_api
+    def __init__(self, mode='prod', addr='127.0.0.1'):
+        self.base_url = get_base_url(mode, addr)
+        self.models_api_full = self.base_url + models_api
         self.models_list_api_full = self.models_api_full + '?isDetailed=false'
         self._models_ids = list()
         self._models_metadata = dict()
@@ -16,7 +17,7 @@ class modelBank(object):
         return self._models_ids
 
     def set_models_ids(self):
-        self._models_ids = get_models_list()
+        self._models_ids = get_models_list(self.base_url)
 
     models_ids = property(get_models_ids, set_models_ids)
 
@@ -27,7 +28,7 @@ class modelBank(object):
 
     def set_models_metadata(self):
         for m_id in self.models_ids:
-            m_meta = get_model_metadata(m_id)
+            m_meta = get_model_metadata(self.base_url, m_id)
             if m_meta:
                 self._models_metadata[m_id] = m_meta
 
@@ -39,6 +40,6 @@ class modelBank(object):
         return self._models_caller
 
     def set_models_caller(self):
-        self._models_caller = ModelCaller(self.models_metadata)
+        self._models_caller = ModelCaller(self.base_url, self.models_metadata)
 
     models_caller = property(get_models_caller, set_models_caller)

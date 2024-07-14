@@ -3,12 +3,15 @@
 import os, sys
 
 from pygeomodels.modelBank import modelBank
-from pygeomodels.api import get_task_status
+from pygeomodels.modelTask import modelTask
+
 
 def main():
     """
     """
-    model_bank = modelBank()
+    model_bank = modelBank('local')
+    model_task = modelTask('local')
+
     caller = model_bank.models_caller
     inputs = {"z": "/onesis/kt4/dem/dem_meixi.tif"}
     params = {}
@@ -23,10 +26,11 @@ def main():
         print('Task submitted failed: %s' % result['message'])
 
     if task_id:
-        task_resp = get_task_status(task_id)
+        task_resp = model_task.get_status(task_id)
         if task_resp:
             print('Task status: %s' % task_resp['status'])
-            print('Task log: %s' % task_resp['log'])
+            if 'log' in task_resp:
+                print('Task log: %s' % task_resp['log'])
 
 
 if __name__ == "__main__":

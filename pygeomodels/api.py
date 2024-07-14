@@ -5,7 +5,7 @@ from pygeomodels.config import *
 from pygeomodels.utils import generate_uniqueid
 
 
-def get_models_list() -> List[str]:
+def get_models_list(base_url: str) -> List[str]:
     models_list_api_full = base_url + models_api + '?isDetailed=false'
     resp = requests.get(models_list_api_full).json()
     models_ids = list()
@@ -18,7 +18,7 @@ def get_models_list() -> List[str]:
     return models_ids
 
 
-def get_model_metadata(model_id: str) -> Dict[str, Optional[Any]]:
+def get_model_metadata(base_url: str, model_id: str) -> Dict[str, Optional[Any]]:
     getmodel_api_full = base_url + models_api + ('/%s' % model_id) + '?page=1&size=20'
     resp = requests.get(getmodel_api_full).json()
     if resp['success']:
@@ -28,7 +28,8 @@ def get_model_metadata(model_id: str) -> Dict[str, Optional[Any]]:
         return {}
 
 
-def submit_model_task(model_id: str,
+def submit_model_task(base_url: str,
+                      model_id: str,
                       inputs: Dict[str, Optional[Any]],
                       params: Dict[str, Optional[Any]],
                       outputs: Dict[str, Optional[Any]],
@@ -52,7 +53,7 @@ def submit_model_task(model_id: str,
     return response.json()
 
 
-def get_task_status(task_id: str) -> Dict[str, Optional[Any]]:
+def get_task_status(base_url: str, task_id: str) -> Dict[str, Optional[Any]]:
     gettask_api_full = base_url + task_api + ('/%s' % task_id)
     resp = requests.get(gettask_api_full).json()
     if resp['success']:

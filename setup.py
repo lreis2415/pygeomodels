@@ -105,16 +105,8 @@ setup(
         # requirements files see:
         # https://packaging.python.org/en/latest/requirements.html
         install_requires=[
-            # In case of incompatibility, users are encouraged to
-            #   install these required package by themselves.
-            # See requirements.txt and requirements_dev.txt for more details.
-            # 'gdal>=1.9.0',
-            # 'numpy>=1.9.0',
-            # 'matplotlib',
             'typing;python_version<"3.5"',
-            # 'future',
-            # 'six',
-            # 'configparser;python_version<"3"'
+            'requests'
         ],
 
         # List additional groups of dependencies here (e.g. development
@@ -126,7 +118,7 @@ setup(
         # If there are data files included in your packages that need to be
         # installed, specify them here.  If using Python 2.6 or less, then these
         # have to be included in MANIFEST.in as well.
-        package_data={},
+        package_data={'pygeomodels': ['*.ini']},
 
         # Although 'package_data' is the preferred approach, in some case you may
         # need to place data files outside of your packages. See:

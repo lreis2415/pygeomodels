@@ -7,9 +7,18 @@
 
      - 2024-06-02 - ljzhu - original version.
 """
+import os
 import json
 import uuid
 from typing import Iterator
+
+
+def is_file_exists(filename):
+    """Check the existence of file path."""
+    if filename is None or not os.path.exists(filename) or not os.path.isfile(filename):
+        return False
+    else:
+        return True
 
 
 def load_jsonfile(jsonfile, encoding='utf-8'):

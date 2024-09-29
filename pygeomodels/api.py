@@ -1,68 +1,39 @@
 import requests
-from typing import Any, Dict, List, Optional
-
-from pygeomodels.config import *
-from pygeomodels.utils import generate_uniqueid
 
 
-def get_models_list(base_url: str) -> List[str]:
-    models_list_api_full = base_url + models_api + '?isDetailed=false'
-    resp = requests.get(models_list_api_full).json()
-    models_ids = list()
-    if resp['success']:
-        modellist = resp['data']
-        for model in modellist:
-            models_ids.append(model['model_id'])
+def restapi_get(host, method, access_token):
+    # For example,
+    #   host = "http://modelmanager:7504"
+    #   method = "mbms/v1/model-manager/general-models/catalog"
+    url = f"{host}/{method}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get(url, headers=headers)
+    # print(url)
+    if resp.status_code == 200:
+        try:
+            jsondata = resp.json()
+            return jsondata
+        except:
+            print('Cannot get JSON data from %s' % url)
     else:
-        print('Get models list failed!\nError code: %d\n Error message: %s' % (resp['code'], resp['message']))
-    return models_ids
+        print('Get API (%s) failed!' % url)
+        return None
 
 
-def get_model_metadata(base_url: str, model_id: str) -> Dict[str, Optional[Any]]:
-    getmodel_api_full = base_url + models_api + ('/%s' % model_id) + '?page=1&size=20'
-    resp = requests.get(getmodel_api_full).json()
-    if resp['success']:
-        return resp['data']
+def restapi_post(host, method, body, access_token):
+    url = f"{host}/{method}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.post(url, json=body, headers=headers)
+    if resp.status_code == 200:
+        try:
+            jsondata = resp.json()
+            return jsondata
+        except:
+            print('Cannot POST API %s' % url)
     else:
-        print('Get model metadata failed!\nError code: %d\n Error message: %s' % (resp['code'], resp['message']))
-        return {}
-
-
-def submit_model_task(base_url: str,
-                      model_id: str,
-                      inputs: Dict[str, Optional[Any]],
-                      params: Dict[str, Optional[Any]],
-                      outputs: Dict[str, Optional[Any]],
-                      taskname: str = '') -> Dict[str, Optional[Any]]:
-    modelapi = base_url + models_api + ('/%s/task' % model_id)
-    if taskname == '':
-        taskname = 'notebook-' + str(next(generate_uniqueid()))
-    post_body = {
-        "params": [
-        ],
-        "task_name": taskname
-    }
-
-    for it in inputs:
-        post_body['params'].append({'param_name': it, 'param_value': inputs[it]})
-    for it in params:
-        post_body['params'].append({'param_name': it, 'param_value': params[it]})
-    for it in outputs:
-        post_body['params'].append({'param_name': it, 'param_value': outputs[it]})
-    response = requests.post(modelapi, json=post_body)
-    return response.json()
-
-
-def get_task_status(base_url: str, task_id: str) -> Dict[str, Optional[Any]]:
-    gettask_api_full = base_url + task_api + ('/%s' % task_id)
-    resp = requests.get(gettask_api_full).json()
-    if resp['success']:
-        return resp['data']
-    else:
-        print('Get model metadata failed!\nError code: %d\n Error message: %s' % (resp['code'], resp['message']))
-        return {}
+        print('POST API (%s) failed!' % url)
+        return None
 
 
 if __name__ == "__main__":
     pass
-    

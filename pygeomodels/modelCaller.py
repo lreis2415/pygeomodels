@@ -6,6 +6,10 @@ from pygeomodels.utils import generate_uniqueid
 
 
 class ModelCaller:
+    """
+    ModelCaller is a class that generates model functions for each model.
+    It is used to call the model functions.
+    """
     def __init__(self, cfg: ModelEngineConfig, metadata: Dict[str, Dict[str, Optional[Any]]]):
         self.cfg = cfg
         self.mmeta = metadata
@@ -18,21 +22,19 @@ class ModelCaller:
             m_name = m_data['model_unique_abbr']
 
             def create_model_function(_id, _name):
-                def model_function(_inputs: Dict[str, Optional[Any]],
-                                   _params: Dict[str, Optional[Any]],
-                                   _outputs: Dict[str, Optional[Any]],
-                                   _taskname: str = '') -> Optional[Dict[str, Optional[Any]]]:
-                    # Using model-runner to start a task. Deprecated.
-                    # mbms/v1/model-runner/single-models/{id}/run
-                    # method = "%s/%s/%s/%s/%s" % (self.cfg.api_basename, self.cfg.api_cls_runner,
-                    #                              self.cfg.api_run_singlemodel, _id, self.cfg.api_srun_run)
+                def model_function(request_body: Dict[str, Any]) -> Optional[str]:
+                    _inputs = request_body.get('inputs', {})
+                    _params = request_body.get('params', {})
+                    _outputs = request_body.get('outputs', {})
+                    _taskname = request_body.get('task_name', '')
+                    _model_id = request_body.get('model_id', _id)
 
                     # Using user-projects to start a model computation.
                     # mbms/v1/user-projects/single-models/{id}/run
                     method = "%s/%s/%s/%s/%s" % (self.cfg.api_basename, self.cfg.api_cls_usrprj,
-                                                 self.cfg.api_uprj_single, _id, self.cfg.api_sprj_run)
+                                                 self.cfg.api_uprj_single, _model_id, self.cfg.api_sprj_run)
                     if _taskname == '':
-                        _taskname = 'code-%s-%s' % (_name, str(next(generate_uniqueid())))
+                        _taskname = 'mcp-%s-%s' % (_name, str(next(generate_uniqueid())))
                     post_body = {
                         "params": [
                         ],
@@ -55,13 +57,6 @@ class ModelCaller:
 
             model_function = create_model_function(m_id, m_name)
             model_function.__name__ = m_name
-            model_function.__annotations__ = {
-                'inputs': Dict[str, Any],
-                'params': Dict[str, Any],
-                'outputs': Dict[str, Any],
-                'return': Dict[str, Any]
-            }
-
             model_functions[m_name] = model_function
 
         return model_functions

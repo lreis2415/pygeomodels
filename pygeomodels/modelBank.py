@@ -4,6 +4,10 @@ from pygeomodels.modelCaller import ModelCaller
 
 
 class modelBank(object):
+    """
+    modelBank is a class that manages the models in the model bank.
+    It is used to get the models ids, metadata, and caller.
+    """
     def __init__(self, cfg: ModelEngineConfig):
         self.cfg = cfg
         self._models_ids = list()
@@ -16,11 +20,12 @@ class modelBank(object):
         return self._models_ids
 
     def set_models_ids(self):
+        # mbms/v1/model-manager/general-single-models/list
         res = restapi_get(self.cfg.modelmanager_url,
                           "%s/%s/%s/%s%s" % (self.cfg.api_basename, self.cfg.api_cls_modelmanager,
                                              self.cfg.api_mgt_singlemodel, self.cfg.api_sm_list,
                                              '?modelName=&description=&categoryId=&semantic=&auditStatus=&page='
-                                             '&size=200'),
+                                             '&size=40'),
                           self.cfg.token)
         if res is not None:
             if res['success'] == 'true' or res['success']:
@@ -43,6 +48,7 @@ class modelBank(object):
         if not self._models_ids:
             self.set_models_ids()
         for m_id in self._models_ids:
+            # mbms/v1/model-manager/general-single-models/{id}/info
             res = restapi_get(self.cfg.modelmanager_url,
                               "%s/%s/%s/%s/%s" % (self.cfg.api_basename, self.cfg.api_cls_modelmanager,
                                                   self.cfg.api_mgt_singlemodel, m_id, self.cfg.api_sm_info),
@@ -53,6 +59,33 @@ class modelBank(object):
                 self._models_metadata[m_id] = res['data']
 
     models_metadata = property(get_models_metadata, set_models_metadata)
+
+    def list_all_models(self):
+        if not self._models_metadata:
+            self.set_models_metadata()
+        
+        models_list = []
+        for m_id, m_data in self._models_metadata.items():
+            models_list.append({
+                "model_id": m_id,
+                "name": m_data.get('model_unique_abbr', ''),
+                "description": m_data.get('identification', {}).get('description', '')
+            })
+        return models_list
+
+    def describe_model(self, model_id: str):
+        if not self._models_metadata:
+            self.set_models_metadata()
+
+        model_data = self._models_metadata.get(model_id)
+        if model_data is None:
+            return None
+
+        # Assuming inputs, params, outputs are directly available in model_data
+        # You may need to adjust this based on the actual structure of your model metadata
+        return {
+            "model_data": model_data
+        }
 
     def get_models_caller(self):
         if self._models_caller is None:

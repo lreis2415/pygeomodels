@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  pygeomodels-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pygeomodels-mcp
+    ports:
+      - "8050:8050"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8050/mcp', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - pygeomodels-network
+
+networks:
+  pygeomodels-network:
+    driver: bridge

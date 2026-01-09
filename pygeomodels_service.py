@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from pygeomodels.modelBank import modelBank
 from pygeomodels.config import parse_config
 from pygeomodels.modelTask import modelTask
+from pygeomodels.NewCase import NewCase
 
 # logging.basicConfig(
 #     filename="mcp_debug.log",
@@ -23,6 +24,14 @@ from pygeomodels.modelTask import modelTask
 logger = logging.getLogger(__name__)
 
 __version__ = "0.1.0"
+
+# 支持的模型类别
+SUPPORTED_CATEGORIES = [
+    "basic",
+    "interpolation",
+    "topographic_attribute",
+    "hydrology_analysis"
+]
 
 
 def validate_api_key(api_key: Optional[str]) -> bool:
@@ -90,7 +99,7 @@ def initialize() -> None:
     if cfg is None:
         cfg = parse_config()
     if mb is None:
-        mb = modelBank(cfg)
+        mb = modelBank(cfg, category_ids=SUPPORTED_CATEGORIES)
     # 确保models_caller也被初始化
     if mb.models_caller is None:
         mb.set_models_caller()
@@ -216,9 +225,9 @@ def calculate_area(dem_path: str) -> float:
     :param dem_path: DEM数据文件路径
     :return: 研究区面积
     """
-
-    # 计算研究区面积，这里仅仅是模拟数据
-    area = 100.0
+    # 创建 NewCase 实例并调用实际算法
+    new_case = NewCase(DEMfile=dem_path)
+    area = new_case.get_area()
 
     return float(area)
 
@@ -231,9 +240,9 @@ def calculate_elevation_difference(dem_path: str) -> float:
     :param dem_path: DEM数据文件路径
     :return: 高程差
     """
-
-    # 计算高程差，这里仅仅是模拟数据
-    elevation_difference = 50.0
+    # 创建 NewCase 实例并调用实际算法
+    new_case = NewCase(DEMfile=dem_path)
+    elevation_difference = new_case.get_elevationD()
 
     return float(elevation_difference)
 
@@ -246,9 +255,9 @@ def calculate_sdh(dem_path: str) -> float:
     :param dem_path: DEM数据文件路径
     :return: 高程值标准差
     """
-
-    # 计算高程值的标准差，这里仅仅是模拟数据
-    sdh = 5.0
+    # 创建 NewCase 实例并调用实际算法
+    new_case = NewCase(DEMfile=dem_path)
+    sdh = new_case.get_SDH()
 
     return float(sdh)
 
@@ -261,9 +270,9 @@ def calculate_mean_slope(dem_path: str) -> float:
     :param dem_path: 坡度数据文件路径
     :return: 平均坡度值
     """
-
-    # 计算坡度的平均值，这里仅仅是模拟数据
-    slope_average = 20.0
+    # 创建 NewCase 实例并调用实际算法
+    new_case = NewCase(DEMfile=dem_path)
+    slope_average = new_case.get_meanS()
 
     return float(slope_average)
 
@@ -276,9 +285,9 @@ def calculate_resolution(dem_path: str) -> float:
     :param dem_path: DEM数据文件路径
     :return: 空间分辨率
     """
-
-    # 计算空间分辨率，这里仅仅是模拟数据
-    resolution = 30.0
+    # 创建 NewCase 实例并调用实际算法
+    new_case = NewCase(DEMfile=dem_path)
+    resolution = new_case.get_resolution()
 
     return float(resolution)
 

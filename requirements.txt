@@ -1,0 +1,30 @@
+# PyGeoModels MCP 服务依赖
+
+# 数值计算基础库 (pygeoc 依赖)
+numpy>=1.20.0
+
+# 科学计算库
+scipy>=1.7.0
+
+# GDAL 地理数据处理
+GDAL>=3.0.0
+
+# 地理计算工具 (需要编译 C 扩展)
+pygeoc>=0.2.0
+
+# HTTP 客户端
+requests>=2.31.0
+
+# MCP 框架
+fastmcp>=0.1.0
+
+# ASGI 服务器
+uvicorn[standard]>=0.30.0
+
+# Web 框架
+starlette[full]>=0.27.0
+
+# 其他依赖
+typing-extensions>=4.0.0
+pydantic>=2.0.0
+

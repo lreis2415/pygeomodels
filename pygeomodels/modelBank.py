@@ -1,3 +1,5 @@
+from typing import List, Optional
+
 from pygeomodels.config import ModelEngineConfig
 from pygeomodels.api import restapi_get
 from pygeomodels.modelCaller import ModelCaller
@@ -8,8 +10,9 @@ class modelBank(object):
     modelBank is a class that manages the models in the model bank.
     It is used to get the models ids, metadata, and caller.
     """
-    def __init__(self, cfg: ModelEngineConfig):
+    def __init__(self, cfg: ModelEngineConfig, category_ids: Optional[List[str]] = None):
         self.cfg = cfg
+        self._category_ids = category_ids  # 存储类别列表
         self._models_ids = list()
         self._models_metadata = dict()
         self._models_caller = None
@@ -20,22 +23,41 @@ class modelBank(object):
         return self._models_ids
 
     def set_models_ids(self):
-        # mbms/v1/model-manager/general-single-models/list
-        res = restapi_get(self.cfg.modelmanager_url,
-                          "%s/%s/%s/%s%s" % (self.cfg.api_basename, self.cfg.api_cls_modelmanager,
-                                             self.cfg.api_mgt_singlemodel, self.cfg.api_sm_list,
-                                             '?modelName=&description=&categoryId=&semantic=&auditStatus=&page='
-                                             '&size=40'),
-                          self.cfg.token)
+        # 如果没有指定类别，保持原有行为（获取所有）
+        if self._category_ids is None or len(self._category_ids) == 0:
+            self._load_models_by_category(None)
+        else:
+            # 遍历每个类别，逐个加载模型ID（API不支持列表）
+            for category_id in self._category_ids:
+                self._load_models_by_category(category_id)
+
+    def _load_models_by_category(self, category_id: Optional[str]) -> None:
+        """
+        根据categoryId加载模型ID
+
+        Args:
+            category_id: 类别ID，如果为None则获取所有模型
+        """
+        category_param = f'categoryId={category_id}' if category_id else 'categoryId='
+        res = restapi_get(
+            self.cfg.modelmanager_url,
+            "%s/%s/%s/%s%s" % (self.cfg.api_basename, self.cfg.api_cls_modelmanager,
+                               self.cfg.api_mgt_singlemodel, self.cfg.api_sm_list,
+                               f'?modelName=&description=&{category_param}&semantic=&auditStatus=&page=&size=40'),
+            self.cfg.token
+        )
         if res is not None:
             if res['success'] == 'true' or res['success']:
                 modellist = res['data']['content']
                 for model in modellist:
-                    self._models_ids.append(model['model_id'])
+                    model_id = model['model_id']
+                    # 避免重复添加
+                    if model_id not in self._models_ids:
+                        self._models_ids.append(model_id)
             else:
-                print('Get models list failed!\nError message: %s' % res['message'])
+                print(f'Get models list for category "{category_id}" failed!\nError message: {res["message"]}')
         else:
-            print('Get models list failed!')
+            print(f'Get models list for category "{category_id}" failed!')
 
     models_ids = property(get_models_ids, set_models_ids)
 

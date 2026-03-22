@@ -16,10 +16,10 @@ pygeoc>=0.2.0
 requests>=2.31.0
 
 # MCP 框架
-fastmcp>=0.1.0
+fastmcp>=3.1.1
 
 # ASGI 服务器
-uvicorn[standard]>=0.30.0
+uvicorn[standard]>=0.42.0
 
 # Web 框架
 starlette[full]>=0.27.0
@@ -27,4 +27,3 @@ starlette[full]>=0.27.0
 # 其他依赖
 typing-extensions>=4.0.0
 pydantic>=2.0.0
-

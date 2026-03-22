@@ -7,6 +7,10 @@ import logging
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware import Middleware
+import uvicorn
+
+from auth_context import set_bearer_token
 
 # logging.basicConfig(
 #     filename="mcp_debug.log",
@@ -20,11 +24,11 @@ __version__ = "0.1.0"
 
 # 地形分析工具集开关
 # 设置为 True 时启用地形分析工具，设置为 False 时禁用
-ENABLE_TERRAIN_ANALYSIS_TOOLS = True
+ENABLE_TERRAIN_ANALYSIS_TOOLS = False
 
 # EGC工具集开关
 # 设置为 True 时启用EGC工具，设置为 False 时禁用
-ENABLE_MODEL_MANAGEMENT_TOOLS = False
+ENABLE_MODEL_MANAGEMENT_TOOLS = True
 
 
 def validate_api_key(api_key: Optional[str]) -> bool:
@@ -69,12 +73,31 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if not validate_api_key(api_key):
             return JSONResponse(
                 status_code=401,
-                content={"error": "Invalid or missing API key. Use ?key=<your-api-key>"}
+                content={
+                    "error": "Invalid or missing API key. Use ?key=<your-api-key>"
+                },
             )
 
         # 验证通过，继续处理请求
         response = await call_next(request)
         return response
+
+
+class BearerCaptureMiddleware(BaseHTTPMiddleware):
+    """Capture Bearer token from Authorization header."""
+
+    async def dispatch(self, request: Request, call_next):
+        auth = request.headers.get("authorization", "")
+        token = None
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+
+        set_bearer_token(token)
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            set_bearer_token(None)
 
 
 # Create an MCP server instance
@@ -83,12 +106,15 @@ mcp = FastMCP("PyGeoModels")
 # 根据开关条件导入地形分析工具集
 if ENABLE_TERRAIN_ANALYSIS_TOOLS:
     from mcp_service.terrain_analysis_tools import register_terrain_tools
+
     register_terrain_tools(mcp)
 
 # 根据开关条件导入EGC工具集
 if ENABLE_MODEL_MANAGEMENT_TOOLS:
     from mcp_service.egc_service_tools import register_model_tools
+
     register_model_tools(mcp)
+
 
 @mcp.tool()
 def ready() -> str:
@@ -103,8 +129,10 @@ if __name__ == "__main__":
 
     # mcp.run(transport="sse", host="127.0.0.1", port=5000) # Use SSE transport（官方弃用） "url": "http://localhost:5000/sse"
 
-    mcp.run(transport="http", host="127.0.0.1", port=8050, path="/mcp") # Use Streamable HTTP transport "url": "http://localhost:5000/mcp"
-
-    # 使用自定义中间件启动服务，支持 ?key=<api-key> 参数验证
-    # app = mcp.http_app(middleware=[Middleware(APIKeyMiddleware)])
-    # uvicorn.run(app, host="127.0.0.1", port=8050, path="/mcp")
+    app = mcp.http_app(
+        path="/mcp",
+        middleware=[
+            Middleware(BearerCaptureMiddleware),
+        ],
+    )
+    uvicorn.run(app, host="127.0.0.1", port=8050)

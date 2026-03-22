@@ -6,13 +6,15 @@ from typing import Any, Dict, List, Optional
 from pygeomodels.modelBank import modelBank
 from pygeomodels.config import parse_config
 from pygeomodels.modelTask import modelTask
+from mcp_service.inner_api import get_required_bearer_token
+from auth_context import get_bearer_token
 
 # 支持的模型类别
 SUPPORTED_CATEGORIES = [
     "basic",
     "interpolation",
     "topographic_attribute",
-    "hydrology_analysis"
+    "hydrology_analysis",
 ]
 
 # 全局变量，用于存储配置和模型库
@@ -37,9 +39,6 @@ def register_model_tools(mcp):
             cfg = parse_config()
         if mb is None:
             mb = modelBank(cfg, category_ids=SUPPORTED_CATEGORIES)
-        # 确保models_caller也被初始化
-        if mb.models_caller is None:
-            mb.set_models_caller()
 
     @mcp.tool()
     def list_models() -> List[Dict[str, Any]]:
@@ -47,14 +46,17 @@ def register_model_tools(mcp):
         Returns a list of all GIS models with brief information (model_id, name, description).
         """
         initialize()
-        return mb.list_all_models()
+        access_token = get_required_bearer_token()
+        return mb.list_all_models(access_token)
 
     @mcp.tool()
     def describe_model(model_id: str) -> Optional[Dict[str, Any]]:
         """
         Returns detailed parameter definitions(metadata) for a specific model using model_id instead of model_name.
         """
-        return mb.describe_model(model_id)
+        initialize()
+        access_token = get_required_bearer_token()
+        return mb.describe_model(model_id, access_token)
 
     @mcp.tool()
     def run_model(request_body: Dict[str, Any]) -> Optional[str]:
@@ -84,16 +86,21 @@ def register_model_tools(mcp):
                 "task_name": "填洼任务"
             }
         """
+        initialize()
+        access_token = get_required_bearer_token()
+
         model_name = request_body.get("model_name")
         if model_name is None:
             raise ValueError("model_name must be provided in the request body.")
 
-        # Initialize model caller if not already initialized
-        if mb.models_caller is None:
-            mb.set_models_caller()
+        request_body = dict(request_body)
+        request_body["access_token"] = access_token
+
+        # Initialize/Get model caller with current token
+        model_caller = mb.get_models_caller(access_token)
 
         # Dynamically get the model function from ModelCaller
-        model_function = getattr(mb.models_caller, model_name, None)
+        model_function = getattr(model_caller, model_name, None)
         if model_function is None:
             raise AttributeError(f"No such model: {model_name}")
 
@@ -105,7 +112,9 @@ def register_model_tools(mcp):
         """
         Queries task progress for a given project_id.
         """
-        task = modelTask(cfg, project_id)
+        initialize()
+        access_token = get_required_bearer_token()
+        task = modelTask(cfg, project_id, access_token)
         return task.progress()
 
     @mcp.tool()
@@ -113,5 +122,16 @@ def register_model_tools(mcp):
         """
         Queries task logs for a given project_id.
         """
-        task = modelTask(cfg, project_id)
+        initialize()
+        access_token = get_required_bearer_token()
+        task = modelTask(cfg, project_id, access_token)
         return task.log()
+
+    @mcp.tool()
+    def debug_token_tool() -> Dict[str, Any]:
+        """Temporary debug tool for token propagation check."""
+        token = get_bearer_token()
+        return {
+            "has_token": bool(token),
+            "prefix": token[:8] if token else None,
+        }

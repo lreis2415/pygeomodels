@@ -50,13 +50,13 @@ def register_model_tools(mcp):
         return mb.list_all_models(access_token)
 
     @mcp.tool()
-    def describe_model(model_id: str) -> Optional[Dict[str, Any]]:
+    def describe_model(model_name: str) -> Optional[Dict[str, Any]]:
         """
-        Returns detailed parameter definitions(metadata) for a specific model using model_id instead of model_name.
+        Returns model description and parameter info using model_name (model_unique_abbr).
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.describe_model(model_id, access_token)
+        return mb.describe_model(model_name, access_token)
 
     @mcp.tool()
     def run_model(request_body: Dict[str, Any]) -> Optional[str]:

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pygeomodels.config import ModelEngineConfig
 from pygeomodels.api import restapi_get
@@ -129,36 +129,81 @@ class modelBank(object):
 
     models_metadata = property(get_models_metadata, set_models_metadata)
 
+    def _classify_parameter_bucket(self, parameter: Dict[str, Any]) -> str:
+        param_type = str(parameter.get("param_type", "")).strip().lower()
+        if param_type == "input_data":
+            return "inputs"
+        if param_type == "output_data":
+            return "outputs"
+        return "params"
+
+    def _build_run_template(
+        self, model_name: str, parameters: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        template: Dict[str, Any] = {
+            "model_name": model_name,
+            "inputs": {},
+            "params": {},
+            "outputs": {},
+            "task_name": "",
+        }
+
+        for parameter in parameters:
+            if not bool(parameter.get("is_required", False)):
+                continue
+            bucket = self._classify_parameter_bucket(parameter)
+            key = parameter.get("arg_name") or parameter.get("name")
+            if key:
+                specification = parameter.get("specification", {}) or {}
+                template[bucket][key] = specification.get("default")
+
+        return template
+
     def list_all_models(self, access_token: Optional[str] = None):
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
         if not self._models_metadata or self._metadata_token != token:
             self.set_models_metadata(token)
 
         models_list = []
-        for m_id, m_data in self._models_metadata.items():
+        for _, m_data in self._models_metadata.items():
             models_list.append(
                 {
-                    "model_id": m_id,
-                    "name": m_data.get("model_unique_abbr", ""),
-                    "description": m_data.get("identification", {}).get(
+                    "model_name": m_data.get("model_unique_abbr", ""),
+                    "model_description": m_data.get("identification", {}).get(
                         "description", ""
                     ),
                 }
             )
         return models_list
 
-    def describe_model(self, model_id: str, access_token: Optional[str] = None):
+    def describe_model(
+        self, model_name: str, access_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
         if not self._models_metadata or self._metadata_token != token:
             self.set_models_metadata(token)
 
-        model_data = self._models_metadata.get(model_id)
-        if model_data is None:
-            return None
+        for _, model_data in self._models_metadata.items():
+            if model_data.get("model_unique_abbr", "") == model_name:
+                description = model_data.get("identification", {}).get(
+                    "description", ""
+                )
+                parameters = model_data.get("parameter_info", {}).get("parameters", [])
 
-        # Assuming inputs, params, outputs are directly available in model_data
-        # You may need to adjust this based on the actual structure of your model metadata
-        return {"model_data": model_data}
+                visible_parameters = [
+                    p for p in parameters if bool(p.get("visible", False))
+                ]
+                run_template = self._build_run_template(model_name, visible_parameters)
+
+                return {
+                    "model_name": model_name,
+                    "description": description,
+                    "run_template": run_template,
+                    "parameter_info": {
+                        "parameters": visible_parameters,
+                    },
+                }
+        return None
 
     def get_models_caller(self, access_token: Optional[str] = None):
         token = self._resolve_token(

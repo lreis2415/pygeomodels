@@ -41,17 +41,14 @@ class modelBank(object):
 
     def set_categories(self, access_token: Optional[str] = None) -> None:
         token = self._resolve_token(access_token, self._categories_token)
-        res = restapi_get(
-            self.cfg.modelmanager_url,
-            "%s/%s/%s/%s"
-            % (
-                self.cfg.api_basename,
-                self.cfg.api_cls_modelmanager,
-                self.cfg.api_mgt_generalmodel,
-                self.cfg.api_gm_catalogcls,
-            ),
-            token,
+        # Use v2 API for catalog endpoints
+        path = self.cfg.build_api_path(
+            self.cfg.api_cls_modelmanager,
+            self.cfg.api_mgt_generalmodel,
+            self.cfg.api_gm_catalogcls,
+            version_key='gm_catalog'
         )
+        res = restapi_get(self.cfg.modelmanager_url, path, token)
         if res is not None and (res["success"] == "true" or res["success"]):
             self._categories = [
                 item["id"] for item in res.get("data", {}).get("categories", [])

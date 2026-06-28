@@ -9,14 +9,6 @@ from pygeomodels.modelTask import modelTask
 from mcp_service.inner_api import get_required_bearer_token
 from auth_context import get_bearer_token
 
-# 支持的模型类别
-SUPPORTED_CATEGORIES = [
-    "basic",
-    "interpolation",
-    "topographic_attribute",
-    "hydrology_analysis",
-]
-
 # 全局变量，用于存储配置和模型库
 cfg = None
 mb = None
@@ -38,16 +30,26 @@ def register_model_tools(mcp):
         if cfg is None:
             cfg = parse_config()
         if mb is None:
-            mb = modelBank(cfg, category_ids=SUPPORTED_CATEGORIES)
+            mb = modelBank(cfg)
 
     @mcp.tool()
-    def list_models() -> List[Dict[str, Any]]:
+    def list_categories() -> List[str]:
         """
-        Returns a list of all GIS models with brief information (model_id, name, description).
+        Returns all available model categories.
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.list_all_models(access_token)
+        return mb.get_categories(access_token)
+
+    @mcp.tool()
+    def list_models(model_name: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Returns a list of GIS models with brief information (model_id, name, description).
+        Use 'list_categories' to discover available category values.
+        """
+        initialize()
+        access_token = get_required_bearer_token()
+        return mb.list_all_models(access_token, category=category)
 
     @mcp.tool()
     def describe_model(model_name: str) -> Optional[Dict[str, Any]]:

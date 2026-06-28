@@ -7,6 +7,12 @@
 enable_terrain_analysis_tools = true
 enable_model_management_tools = true
 
+# Test authentication token for local development
+# WARNING: Only for development testing! Never commit real tokens to git!
+# Get your token from Keycloak or use existing access token
+# Leave empty to require proper authentication from request headers
+test_bearer_token = your_test_token_here
+
 # You can override other settings from default_config.ini here
 # For example:
 # [SERVICE]

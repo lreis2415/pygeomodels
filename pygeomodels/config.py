@@ -166,10 +166,15 @@ class ModelEngineConfig(object):
             self.enable_model_management_tools = get_option_value(
                 cf, feature_flags, 'enable_model_management_tools', valtyp=bool, defvalue=True, required=False
             )
+            # Test token for local development
+            self.test_bearer_token = get_option_value(
+                cf, feature_flags, 'test_bearer_token', valtyp=str, defvalue='', required=False
+            )
         else:
             # Default values for backward compatibility
             self.enable_terrain_analysis_tools = False
             self.enable_model_management_tools = True
+            self.test_bearer_token = ''
 
         self.token = self.Token
 

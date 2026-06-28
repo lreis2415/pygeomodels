@@ -123,6 +123,15 @@ class ModelEngineConfig(object):
         self.api_gm_catalog = get_option_value(cf, service, 'api_gm_catalog')
         self.api_gm_catalogcls = get_option_value(cf, service, 'api_gm_catalogcls')
         self.api_gm_catalogappl = get_option_value(cf, service, 'api_gm_catalogappl')
+
+        # API版本控制
+        self.api_version_gm_catalog = get_option_value(
+            cf, service, 'api_version_gm_catalog', valtyp=str, defvalue='', required=False
+        )
+        self.api_version_sm_ui = get_option_value(
+            cf, service, 'api_version_sm_ui', valtyp=str, defvalue='', required=False
+        )
+
         # modelmanager_url/api_basename/api_cls_modelmanager/api_mgt_generalmodel/
         self.api_mgt_singlemodel = get_option_value(cf, service, 'api_mgt_singlemodel')
         self.api_sm_list = get_option_value(cf, service, 'api_sm_list')
@@ -177,6 +186,48 @@ class ModelEngineConfig(object):
             self.test_bearer_token = ''
 
         self.token = self.Token
+
+    def get_api_base(self, version_override: str = '') -> str:
+        """
+        Get API base path with version.
+
+        Args:
+            version_override: Specific version to use (e.g., 'v2').
+                            If empty, uses default from api_basename.
+
+        Returns:
+            Base path like 'mbms/v1' or 'mbms/v2'
+        """
+        if version_override:
+            return f"mbms/{version_override}"
+        return self.api_basename
+
+    def build_api_path(self, *path_parts: str, version_key: str = '') -> str:
+        """
+        Build complete API path with automatic version selection.
+
+        Args:
+            *path_parts: Path components to join
+            version_key: Configuration key for version override (e.g., 'gm_catalog')
+
+        Returns:
+            Complete API path
+
+        Example:
+            # Uses default v1
+            cfg.build_api_path('model-manager', 'general-models', 'catalog')
+            # Returns: 'mbms/v1/model-manager/general-models/catalog'
+
+            # Uses v2 if api_version_gm_catalog is configured
+            cfg.build_api_path('model-manager', 'general-models', 'catalog', version_key='gm_catalog')
+            # Returns: 'mbms/v2/model-manager/general-models/catalog'
+        """
+        version_override = ''
+        if version_key:
+            version_override = getattr(self, f'api_version_{version_key}', '')
+
+        base = self.get_api_base(version_override)
+        return f"{base}/{'/'.join(path_parts)}"
 
     @property
     def Token(self, uidx=0):

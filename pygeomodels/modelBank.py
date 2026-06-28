@@ -50,9 +50,17 @@ class modelBank(object):
         )
         res = restapi_get(self.cfg.modelmanager_url, path, token)
         if res is not None and (res["success"] == "true" or res["success"]):
-            self._categories = [
-                item["id"] for item in res.get("data", {}).get("categories", [])
-            ]
+            # v2 API returns nested structure: data.categories[].categories[]
+            # Find the configured root catalog node and extract its child categories
+            root_node = next(
+                (cat for cat in res.get("data", {}).get("categories", [])
+                 if cat.get("id") == self.cfg.api_gm_catalog_root_id),
+                None
+            )
+            if root_node:
+                self._categories = [item["id"] for item in root_node.get("categories", [])]
+            else:
+                self._categories = []
         else:
             print("Get categories list failed!")
             self._categories = []

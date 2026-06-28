@@ -131,6 +131,10 @@ class ModelEngineConfig(object):
         self.api_version_sm_ui = get_option_value(
             cf, service, 'api_version_sm_ui', valtyp=str, defvalue='', required=False
         )
+        # Catalog root node ID for v2 API
+        self.api_gm_catalog_root_id = get_option_value(
+            cf, service, 'api_gm_catalog_root_id', valtyp=str, defvalue='modelbank', required=False
+        )
 
         # modelmanager_url/api_basename/api_cls_modelmanager/api_mgt_generalmodel/
         self.api_mgt_singlemodel = get_option_value(cf, service, 'api_mgt_singlemodel')

@@ -70,3 +70,6 @@ target/
 tmp_results
 
 .DS_Store
+
+# Local configuration files
+local_config.ini

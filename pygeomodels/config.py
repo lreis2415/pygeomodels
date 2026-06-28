@@ -157,6 +157,20 @@ class ModelEngineConfig(object):
         self.api_uprj_single = get_option_value(cf, service, 'api_uprj_single')
         self.api_sprj_run = get_option_value(cf, service, 'api_sprj_run')
 
+        # Feature flags related
+        feature_flags = 'FEATURE_FLAGS'
+        if feature_flags in cf.sections():
+            self.enable_terrain_analysis_tools = get_option_value(
+                cf, feature_flags, 'enable_terrain_analysis_tools', valtyp=bool, defvalue=False, required=False
+            )
+            self.enable_model_management_tools = get_option_value(
+                cf, feature_flags, 'enable_model_management_tools', valtyp=bool, defvalue=True, required=False
+            )
+        else:
+            # Default values for backward compatibility
+            self.enable_terrain_analysis_tools = False
+            self.enable_model_management_tools = True
+
         self.token = self.Token
 
     @property

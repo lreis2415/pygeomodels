@@ -1,0 +1,13 @@
+# Local development configuration
+# Copy this file to local_config.ini and modify for your local development
+# This file is gitignored and will not be committed
+
+[FEATURE_FLAGS]
+# Local development: enable all tools for testing
+enable_terrain_analysis_tools = true
+enable_model_management_tools = true
+
+# You can override other settings from default_config.ini here
+# For example:
+# [SERVICE]
+# modelmanager_url = http://localhost:7504

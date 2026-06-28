@@ -214,13 +214,31 @@ def parse_config(cfg_file='', case_sensitive=False):
     if case_sensitive:
         cf.optionxform = str
     if cfg_file == '':
-        cfg_file = Path(__file__).with_name('default_config.ini')
-    cfg_file = os.path.abspath(cfg_file)
-    if not is_file_exists(cfg_file):
-        print("The specific configuration file did not exist!")
-        sys.exit()
-    # print(cfg_file)
-    cf.read(cfg_file)
+        # Priority: local_config.ini > default_config.ini
+        local_cfg = Path(__file__).with_name('local_config.ini')
+        default_cfg = Path(__file__).with_name('default_config.ini')
+
+        # Always read default config first as base
+        if default_cfg.exists():
+            cfg_file = default_cfg
+            cf.read(cfg_file)
+        else:
+            print("Default configuration file not found!")
+            sys.exit()
+
+        # Then overlay local config if it exists
+        if local_cfg.exists():
+            cf.read(local_cfg)
+            cfg_file = local_cfg  # For error messages
+
+    else:
+        # User specified config file
+        cfg_file = os.path.abspath(cfg_file)
+        if not is_file_exists(cfg_file):
+            print("The specific configuration file did not exist!")
+            sys.exit()
+        cf.read(cfg_file)
+
     return ModelEngineConfig(cf)
 
 

@@ -11,6 +11,7 @@ from starlette.middleware import Middleware
 import uvicorn
 
 from auth_context import set_bearer_token
+from pygeomodels.config import parse_config
 
 # logging.basicConfig(
 #     filename="mcp_debug.log",
@@ -22,13 +23,30 @@ logger = logging.getLogger(__name__)
 
 __version__ = "0.1.0"
 
+# Global configuration
+_cfg = None
+
+
+def get_feature_flags():
+    """Get feature flags from configuration."""
+    global _cfg
+    if _cfg is None:
+        _cfg = parse_config()
+    return _cfg
+
+
 # 地形分析工具集开关
 # 设置为 True 时启用地形分析工具，设置为 False 时禁用
-ENABLE_TERRAIN_ANALYSIS_TOOLS = False
+def ENABLE_TERRAIN_ANALYSIS_TOOLS():
+    cfg = get_feature_flags()
+    return cfg.enable_terrain_analysis_tools
+
 
 # EGC工具集开关
 # 设置为 True 时启用EGC工具，设置为 False 时禁用
-ENABLE_MODEL_MANAGEMENT_TOOLS = True
+def ENABLE_MODEL_MANAGEMENT_TOOLS():
+    cfg = get_feature_flags()
+    return cfg.enable_model_management_tools
 
 
 def validate_api_key(api_key: Optional[str]) -> bool:
@@ -104,13 +122,13 @@ class BearerCaptureMiddleware(BaseHTTPMiddleware):
 mcp = FastMCP("PyGeoModels")
 
 # 根据开关条件导入地形分析工具集
-if ENABLE_TERRAIN_ANALYSIS_TOOLS:
+if ENABLE_TERRAIN_ANALYSIS_TOOLS():
     from mcp_service.terrain_analysis_tools import register_terrain_tools
 
     register_terrain_tools(mcp)
 
 # 根据开关条件导入EGC工具集
-if ENABLE_MODEL_MANAGEMENT_TOOLS:
+if ENABLE_MODEL_MANAGEMENT_TOOLS():
     from mcp_service.egc_service_tools import register_model_tools
 
     register_model_tools(mcp)

@@ -40,7 +40,7 @@ graph TD
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v1/model-manager/general-models/catalog/categories
+GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categories
 ```
 
 **实现位置**: `pygeomodels/modelBank.py` - `set_categories()`
@@ -68,7 +68,7 @@ GET http://localhost:7504/mbms/v1/model-manager/general-models/catalog/categorie
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/list?categoryId=basic&modelName=&description=&semantic=&auditStatus=&page=&size=40
+GET http://localhost:7504/mbms/v2/model-manager/general-single-models/list?categoryId=basic&modelName=&description=&semantic=&auditStatus=&page=&size=40
 ```
 
 **实现位置**: `pygeomodels/modelBank.py` - `_load_models_by_category()`
@@ -344,4 +344,4 @@ PyGeoModels MCP服务提供了完整的地理模型管理和执行功能，通�
 - 完整的API使用指南: `docs/MCP_EGC_Tools_API_Usage.md`
 - 配置说明: `pygeomodels/default_config.ini`
 - 使用示例: `examples/ex01_submit_model_task.py`
-- 测试工具: `test_mcp_service.py` 
+- 测试工具: `test_mcp_service.py`

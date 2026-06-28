@@ -42,10 +42,15 @@ def register_model_tools(mcp):
         return mb.get_categories(access_token)
 
     @mcp.tool()
-    def list_models(model_name: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_models_by_category(category: str) -> List[Dict[str, Any]]:
         """
-        Returns a list of GIS models with brief information (model_id, name, description).
-        Use 'list_categories' to discover available category values.
+        Returns a list of GIS models in a specific category with brief information.
+
+        Args:
+            category: The category name to query. Use 'list_categories' to discover available values.
+
+        Returns:
+            List of models with their names and descriptions in the specified category.
         """
         initialize()
         access_token = get_required_bearer_token()

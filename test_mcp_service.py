@@ -102,26 +102,51 @@ def test_with_test_token():
         print(f"❌ 请求失败: {e}")
 
     # 5. 测试模型列表
-    print("\n5️⃣ 测试模型列表工具...")
+    print("\n5️⃣ 测试按类别查询模型工具...")
     try:
+        # 首先获取可用类别
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "list_models",
+                "name": "list_categories",
                 "arguments": {}
             }
         }
         response = requests.post(MCP_URL, headers=headers, json=payload)
         if response.status_code == 200:
-            models = response.json().get("result", [])
-            print(f"✅ 模型数量: {len(models)}")
-            if models:
-                print(f"   示例模型: {models[0].get('model_name', 'unknown')}")
+            categories = response.json().get("result", [])
+            if categories:
+                first_category = categories[0]
+                print(f"✅ 可用类别: {categories}")
+                print(f"   使用类别 '{first_category}' 查询模型...")
+
+                # 使用第一个类别查询模型
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "list_models_by_category",
+                        "arguments": {
+                            "category": first_category
+                        }
+                    }
+                }
+                response = requests.post(MCP_URL, headers=headers, json=payload)
+                if response.status_code == 200:
+                    models = response.json().get("result", [])
+                    print(f"✅ 类别 '{first_category}' 中的模型数量: {len(models)}")
+                    if models:
+                        print(f"   示例模型: {models[0].get('model_name', 'unknown')}")
+                else:
+                    print(f"❌ 查询模型列表失败: {response.status_code}")
+                    print(f"响应: {response.text}")
+            else:
+                print("❌ 未找到可用类别")
         else:
-            print(f"❌ 获取模型列表失败: {response.status_code}")
-            print(f"响应: {response.text}")
+            print(f"❌ 获取类别失败: {response.status_code}")
     except Exception as e:
         print(f"❌ 请求失败: {e}")
 

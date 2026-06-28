@@ -11,12 +11,12 @@ class modelBank(object):
     It is used to get the models ids, metadata, and caller.
     """
 
-    def __init__(
-        self, cfg: ModelEngineConfig, category_ids: Optional[List[str]] = None
-    ):
+    def __init__(self, cfg: ModelEngineConfig):
         self.cfg = cfg
-        self._category_ids = category_ids  # 存储类别列表
+        self._categories: Optional[List[str]] = None
+        self._categories_token: Optional[str] = None
         self._models_ids = list()
+        self._category_models: Dict[str, List[str]] = {}
         self._models_metadata = dict()
         self._models_caller = None
         self._ids_token = None
@@ -33,6 +33,43 @@ class modelBank(object):
                 return str(token).strip()
         raise ValueError("access_token is required")
 
+    def get_categories(self, access_token: Optional[str] = None) -> List[str]:
+        token = self._resolve_token(access_token, self._categories_token)
+        if self._categories is None or self._categories_token != token:
+            self.set_categories(token)
+        return self._categories
+
+    def set_categories(self, access_token: Optional[str] = None) -> None:
+        token = self._resolve_token(access_token, self._categories_token)
+        res = restapi_get(
+            self.cfg.modelmanager_url,
+            "%s/%s/%s/%s"
+            % (
+                self.cfg.api_basename,
+                self.cfg.api_cls_modelmanager,
+                self.cfg.api_mgt_generalmodel,
+                self.cfg.api_gm_catalogcls,
+            ),
+            token,
+        )
+        if res is not None and (res["success"] == "true" or res["success"]):
+            self._categories = [
+                item["id"] for item in res.get("data", {}).get("categories", [])
+            ]
+        else:
+            print("Get categories list failed!")
+            self._categories = []
+        self._categories_token = token
+        # Invalidate downstream caches since categories may have changed
+        self._models_ids = []
+        self._ids_token = None
+        self._models_metadata = {}
+        self._metadata_token = None
+        self._models_caller = None
+        self._caller_token = None
+
+    categories = property(get_categories, set_categories)
+
     def get_models_ids(self, access_token: Optional[str] = None):
         token = self._resolve_token(access_token, self._ids_token)
         if not self._models_ids or self._ids_token != token:
@@ -41,14 +78,16 @@ class modelBank(object):
 
     def set_models_ids(self, access_token: Optional[str] = None):
         token = self._resolve_token(access_token, self._ids_token)
-        self._models_ids = []
+        # Ensure categories are loaded
+        if self._categories is None or self._categories_token != token:
+            self.set_categories(token)
 
-        # 如果没有指定类别，保持原有行为（获取所有）
-        if self._category_ids is None or len(self._category_ids) == 0:
+        self._models_ids = []
+        self._category_models = {}
+        if not self._categories:
             self._load_models_by_category(None, token)
         else:
-            # 遍历每个类别，逐个加载模型ID（API不支持列表）
-            for category_id in self._category_ids:
+            for category_id in self._categories:
                 self._load_models_by_category(category_id, token)
 
         self._ids_token = token
@@ -83,6 +122,8 @@ class modelBank(object):
                     # 避免重复添加
                     if model_id not in self._models_ids:
                         self._models_ids.append(model_id)
+                    if category_id:
+                        self._category_models.setdefault(category_id, []).append(model_id)
             else:
                 print(
                     f'Get models list for category "{category_id}" failed!\nError message: {res["message"]}'
@@ -159,13 +200,20 @@ class modelBank(object):
 
         return template
 
-    def list_all_models(self, access_token: Optional[str] = None):
+    def list_all_models(self, access_token: Optional[str] = None, category: Optional[str] = None):
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
         if not self._models_metadata or self._metadata_token != token:
             self.set_models_metadata(token)
 
+        if category:
+            model_ids = set(self._category_models.get(category, []))
+        else:
+            model_ids = None
+
         models_list = []
-        for _, m_data in self._models_metadata.items():
+        for m_id, m_data in self._models_metadata.items():
+            if model_ids is not None and m_id not in model_ids:
+                continue
             models_list.append(
                 {
                     "model_name": m_data.get("model_unique_abbr", ""),

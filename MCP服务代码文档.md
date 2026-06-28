@@ -7,8 +7,9 @@ PyGeoModels MCP服务是一个基于FastMCP框架的地理模型调用服务，�
 ## 核心功能
 
 ### 1. 模型管理
-- **list_models()**: 列出所有可用的地理模型
-- **describe_model(model_id)**: 获取指定模型的详细参数定义
+- **list_categories()**: 列出所有可用的模型类别
+- **list_models_by_category(category)**: 列出指定类别下的所有地理模型
+- **describe_model(model_name)**: 获取指定模型的详细参数定义
 
 ### 2. 任务执行
 - **run_model(request_body)**: 提交地理模型任务
@@ -28,6 +29,143 @@ graph TD
 	C --> D[模型调用器 modelCaller.py]
 	D --> E[任务管理 modelTask.py]
 ```
+
+## EGC服务API详细说明
+
+### API端点映射
+
+> 💡 **基础配置**: 所有API基于 `http://localhost:7504/mbms/v1` 构建（可在 `default_config.ini` 中配置）
+
+#### 1. list_categories() - 获取模型类别
+
+**实际路径**:
+```
+GET http://localhost:7504/mbms/v1/model-manager/general-models/catalog/categories
+```
+
+**实现位置**: `pygeomodels/modelBank.py` - `set_categories()`
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      {"id": "basic", "name": "基础分析"},
+      {"id": "interpolation", "name": "空间插值"}
+    ]
+  }
+}
+```
+
+---
+
+#### 2. list_models_by_category(category) - 获取指定类别的模型列表
+
+这是一个**复合操作**，涉及两个EGC API调用：
+
+##### 步骤1: 获取模型ID列表
+
+**实际路径**:
+```
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/list?categoryId=basic&modelName=&description=&semantic=&auditStatus=&page=&size=40
+```
+
+**实现位置**: `pygeomodels/modelBank.py` - `_load_models_by_category()`
+
+##### 步骤2: 获取每个模型的详细信息
+
+**实际路径** (对每个模型ID):
+```
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/slopeAnalysis/info
+```
+
+**实现位置**: `pygeomodels/modelBank.py` - `set_models_metadata()`
+
+---
+
+#### 3. describe_model(model_name) - 获取模型详细元数据
+
+**实际路径**:
+```
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info
+```
+
+**实现位置**: `pygeomodels/modelBank.py` - `describe_model()`
+
+---
+
+#### 4. run_model(request_body) - 提交模型任务
+
+**实际路径**:
+```
+POST http://localhost:7504/mbms/v1/model-runner/single-models/pitRemove/run
+```
+
+**实现位置**: `pygeomodels/modelCaller.py` - 动态生成的模型方法
+
+**请求体示例**:
+```json
+{
+  "inputs": {"dem": "/path/to/input_dem.tif"},
+  "params": {"algorithm": "horn"},
+  "outputs": {"dem": "/path/to/output_dem.tif"},
+  "task_name": "DEM填洼任务"
+}
+```
+
+---
+
+#### 5. get_task_status(project_id) - 查询任务状态
+
+**实际路径**:
+```
+GET http://localhost:7504/mbms/v1/user-projects/proj_12345678/progress
+```
+
+**实现位置**: `pygeomodels/modelTask.py` - `progress()`
+
+---
+
+#### 6. get_task_log(project_id) - 获取任务日志
+
+**实际路径**:
+```
+GET http://localhost:7504/mbms/v1/user-projects/proj_12345678/log
+```
+
+**实现位置**: `pygeomodels/modelTask.py` - `log()`
+
+---
+
+### API认证
+
+所有EGC API调用都需要Bearer Token认证：
+
+```bash
+Authorization: Bearer {access_token}
+```
+
+Token获取方式：
+1. **请求头传递**: 从MCP请求的 `Authorization` 头中提取
+2. **测试配置**: 从 `local_config.ini` 的 `test_bearer_token` 读取（仅开发环境）
+3. **Keycloak认证**: 从配置的Keycloak服务器动态获取（生产环境）
+
+---
+
+### 缓存机制
+
+为优化性能，`modelBank` 实现了多层缓存：
+
+| 缓存项 | 说明 |
+|--------|------|
+| 模型类别 | 缓存类别列表 |
+| 模型ID列表 | 缓存所有模型ID |
+| 类别-模型映射 | 缓存类别与模型的关系 |
+| 模型元数据 | 缓存每个模型的详细信息 |
+
+**缓存失效条件**: Token变化时，所有相关缓存失效
 
 
 ## 对LLM调用的适用性评估
@@ -178,4 +316,32 @@ async def run_model_async(request_body: Dict[str, Any]) -> str:
 
 ## 总结
 
-PyGeoModels MCP服务提供了良好的基础架构，但在错误处理、文档完善和功能完整性方面还有改进空间。建议优先解决初始化问题和错误处理，然后逐步完善文档和功能实现。这样的改进将显著提升服务对LLM调用的适用性和稳定性。 
+PyGeoModels MCP服务提供了完整的地理模型管理和执行功能，通过多层缓存机制优化了性能。
+
+### 核心优势
+
+1. **清晰的API层次**: 从类别发现 → 模型查询 → 详细信息 → 任务执行的完整流程
+2. **智能缓存机制**: Token关联的多层缓存，减少重复API调用
+3. **灵活的认证**: 支持请求头传递、测试配置、Keycloak动态认证
+4. **完整的任务管理**: 从提交到状态查询到日志获取的全生命周期管理
+
+### 使用建议
+
+1. **首次调用**: 使用 `list_categories()` 了解可用的模型分类
+2. **模型发现**: 通过 `list_models_by_category(category)` 浏览类别下的模型
+3. **参数了解**: 用 `describe_model(model_name)` 获取模型的输入输出定义
+4. **任务执行**: 构建正确的请求体，通过 `run_model()` 提交任务
+5. **状态跟踪**: 使用返回的 `project_id` 查询任务状态和日志
+
+### 性能考虑
+
+- **首次调用慢**: `list_models_by_category` 首次调用需要获取所有模型元数据
+- **后续调用快**: 利用缓存机制，相同token下的重复查询几乎无延迟
+- **Token变化**: 切换用户或token时缓存失效，需要重新加载
+
+### 相关文档
+
+- 完整的API使用指南: `docs/MCP_EGC_Tools_API_Usage.md`
+- 配置说明: `pygeomodels/default_config.ini`
+- 使用示例: `examples/ex01_submit_model_task.py`
+- 测试工具: `test_mcp_service.py` 

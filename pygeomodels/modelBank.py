@@ -372,35 +372,72 @@ class modelBank(object):
         lang: str = "en",
     ) -> Optional[Dict[str, Any]]:
         lang = self._normalize_lang(lang)
-        token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
+        token = self._resolve_token(access_token, self._ids_token)
+
+        # 尝试从 /list 缓存中查找 model_id，避免加载全部 158 个模型的 /info
         if (
-            not self._models_metadata
-            or self._metadata_token != token
-            or self._metadata_lang != lang
+            self._basic_info_token is None
+            or self._basic_info_token != token
+            or self._basic_info_lang != lang
         ):
-            self.set_models_metadata(token, lang)
+            self.set_models_ids(token, lang)
 
-        for _, model_data in self._models_metadata.items():
-            if model_data.get("model_unique_abbr", "") == model_name:
-                description = model_data.get("identification", {}).get(
-                    "description", ""
-                )
-                parameters = model_data.get("parameter_info", {}).get("parameters", [])
+        # 从 basic_info 缓存中查找匹配的 model_id
+        target_model_id: Optional[str] = None
+        for m_id, m_data in self._models_basic_info.items():
+            if m_data.get("model_unique_abbr", "") == model_name:
+                target_model_id = m_id
+                break
 
-                visible_parameters = [
-                    p for p in parameters if bool(p.get("visible", False))
-                ]
-                run_template = self._build_run_template(model_name, visible_parameters)
+        # 如果在 basic_info 中未匹配（如 /list 不含 model_unique_abbr），回退到完整加载
+        if target_model_id is None:
+            if (
+                not self._models_metadata
+                or self._metadata_token != token
+                or self._metadata_lang != lang
+            ):
+                self.set_models_metadata(token, lang)
+            for _, model_data in self._models_metadata.items():
+                if model_data.get("model_unique_abbr", "") == model_name:
+                    return self._build_model_description(model_name, model_data)
+            return None
 
-                return {
-                    "model_name": model_name,
-                    "description": description,
-                    "run_template": run_template,
-                    "parameter_info": {
-                        "parameters": visible_parameters,
-                    },
-                }
+        # 仅对匹配的 model_id 调用 /info（1 个请求），而不是 158 个
+        res = restapi_get(
+            self.cfg.modelmanager_url,
+            "%s/%s/%s/%s/%s?lang=%s"
+            % (
+                self.cfg.api_basename,
+                self.cfg.api_cls_modelmanager,
+                self.cfg.api_mgt_singlemodel,
+                target_model_id,
+                self.cfg.api_sm_info,
+                lang,
+            ),
+            token,
+        )
+        if res is not None and (res["success"] == "true" or res["success"]):
+            return self._build_model_description(model_name, res["data"])
         return None
+
+    def _build_model_description(
+        self,
+        model_name: str,
+        model_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """从 /info 响应构建 describe_model 的标准返回格式。"""
+        description = model_data.get("identification", {}).get("description", "")
+        parameters = model_data.get("parameter_info", {}).get("parameters", [])
+        visible_parameters = [p for p in parameters if bool(p.get("visible", False))]
+        run_template = self._build_run_template(model_name, visible_parameters)
+        return {
+            "model_name": model_name,
+            "description": description,
+            "run_template": run_template,
+            "parameter_info": {
+                "parameters": visible_parameters,
+            },
+        }
 
     def get_models_caller(self, access_token: Optional[str] = None):
         token = self._resolve_token(

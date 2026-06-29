@@ -68,9 +68,9 @@ GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categorie
 
 #### 2. list_models_by_category(category, lang) - 获取指定类别的模型列表
 
-这是一个**复合操作**，涉及两个EGC API调用：
+这是一个**轻量级操作**，仅需按类别调用 `/list` 接口，无需对每个模型调用 `/info`。
 
-##### 步骤1: 获取模型ID列表
+##### 获取模型ID列表及基础信息
 
 **实际路径**:
 ```
@@ -81,20 +81,9 @@ GET http://localhost:7504/mbms/v2/model-manager/general-single-models/list?categ
 - `categoryId`: 类别ID
 - `lang` (可选): `cn` 或 `en`，默认 `en`
 
-**实现位置**: `pygeomodels/modelBank.py` - `_load_models_by_category()`
+**实现位置**: `pygeomodels/modelBank.py` - `_load_models_by_category()` / `list_all_models_lightweight()`
 
-##### 步骤2: 获取每个模型的详细信息
-
-**实际路径** (对每个模型ID):
-```
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info?lang={lang}
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/slopeAnalysis/info?lang={lang}
-```
-
-**参数**:
-- `lang` (可选): `cn` 或 `en`，默认 `en`
-
-**实现位置**: `pygeomodels/modelBank.py` - `set_models_metadata()`
+**返回字段**: `model_id`, `display_name`, `description`, 以及（当 `/list` 支持时）`model_unique_abbr`, `category_name`
 
 ---
 
@@ -102,14 +91,18 @@ GET http://localhost:7504/mbms/v1/model-manager/general-single-models/slopeAnaly
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info?lang={lang}
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/{model_id}/info?lang={lang}
 ```
 
 **参数**:
-- `model_name`: 模型唯一标识符
+- `model_name`: 模型唯一标识符（`model_unique_abbr`）
 - `lang` (可选): `cn` 或 `en`，默认 `en`
 
 **实现位置**: `pygeomodels/modelBank.py` - `describe_model()`
+
+**性能优化**: 通过 `_models_basic_info` 缓存查找 `model_id`，仅对匹配的模型调用 1 次 `/info`，无需加载全部模型元数据。
+
+> ⚡ **v0.4 优化**: 不再通过 `set_models_metadata()` 加载全部 158 个模型的 `/info`。改为从 `_models_basic_info` 缓存中匹配 `model_unique_abbr` → `model_id`，仅调用 1 次 `/info`。当缓存中缺少 `model_unique_abbr` 时自动回退到完整加载。
 
 ---
 
@@ -180,7 +173,8 @@ Token获取方式：
 | 模型类别 | 缓存类别列表 | (token, lang) |
 | 模型ID列表 | 缓存所有模型ID | (token, lang) |
 | 类别-模型映射 | 缓存类别与模型的关系 | (token, lang) |
-| 模型元数据 | 缓存每个模型的详细信息 | (token, lang) |
+| 模型基础信息 | 缓存 /list 返回的 display_name、description、model_unique_abbr | (token, lang) |
+| 模型元数据 | 缓存每个模型的完整 /info 详细信息 | (token, lang) |
 
 **缓存失效条件**: 
 - Token 变化时，所有相关缓存失效
@@ -355,9 +349,9 @@ PyGeoModels MCP服务提供了完整的地理模型管理和执行功能，通�
 
 ### 性能考虑
 
-- **首次调用慢**: `list_models_by_category` 首次调用需要获取所有模型元数据
-- **后续调用快**: 利用缓存机制，相同token下的重复查询几乎无延迟
-- **Token变化**: 切换用户或token时缓存失效，需要重新加载
+- **`list_models_by_category`**: 首次调用仅需 `/list` 请求（按类别数量），无需加载 `/info`。后续调用使用缓存，几乎无延迟。
+- **`describe_model`**: 通过 `_models_basic_info` 缓存查找 `model_id`，仅对匹配模型调用 1 次 `/info`，无需加载全部模型。
+- **Token变化**: 切换用户或token时缓存失效，需要重新加载。
 
 ### 相关文档
 

@@ -420,6 +420,87 @@ class TestModelBankLightweightCache(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(mb._basic_info_token, "token123")
 
+    @patch("pygeomodels.modelBank.restapi_get")
+    def test_describe_model_uses_single_info_call(self, mock_get):
+        """describe_model should use only 1 /info call via basic_info cache lookup."""
+        mock_get.side_effect = [
+            MOCK_CATEGORIES,
+            MOCK_LIST_BASIC,
+            MOCK_LIST_ADVANCED,
+            MOCK_INFO_001,  # single /info for abbr_one
+        ]
+
+        mb = modelBank(self.cfg)
+        mb.set_models_ids("token123", lang="en")
+
+        # describe_model should find model-001 via basic_info cache, then call 1 /info
+        result = mb.describe_model("abbr_one", "token123", lang="en")
+
+        # Total: categories(1) + 2 model lists + 1 info = 4 calls
+        self.assertEqual(mock_get.call_count, 4)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["model_name"], "abbr_one")
+        self.assertIn("run_template", result)
+        self.assertIn("parameter_info", result)
+
+    @patch("pygeomodels.modelBank.restapi_get")
+    def test_describe_model_fallback_when_no_abbr_in_basic_info(self, mock_get):
+        """When basic_info lacks model_unique_abbr, fall back to full metadata load."""
+        # /list returns models without model_unique_abbr (old backend),
+        # so basic_info cache entries have empty model_unique_abbr
+        mock_get.side_effect = [
+            MOCK_CATEGORIES,
+            MOCK_LIST_NO_ABBR,
+            MOCK_LIST_ADVANCED,
+            # Fallback: set_models_metadata loads /info for model-004 and model-003
+            {
+                "success": "true",
+                "data": {
+                    "model_unique_abbr": "abbr_four",
+                    "identification": {"model_name": "M4", "description": "Desc 4"},
+                    "parameter_info": {"parameters": []},
+                },
+            },
+            {
+                "success": "true",
+                "data": {
+                    "model_unique_abbr": "",
+                    "identification": {"model_name": "M3", "description": "Desc 3"},
+                    "parameter_info": {"parameters": []},
+                },
+            },
+        ]
+
+        mb = modelBank(self.cfg)
+        mb.set_models_ids("token123", lang="en")
+
+        # basic_info has empty abbr for model-004, so lookup fails, triggers fallback
+        result = mb.describe_model("abbr_four", "token123", lang="en")
+
+        # 1(categories) + 2(model lists) + 2(/info fallback for model-004, model-003) = 5
+        self.assertEqual(mock_get.call_count, 5)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["model_name"], "abbr_four")
+
+    @patch("pygeomodels.modelBank.restapi_get")
+    def test_describe_model_unknown_model_returns_none(self, mock_get):
+        """describe_model should return None for unknown model names."""
+        mock_get.side_effect = [
+            MOCK_CATEGORIES,
+            MOCK_LIST_BASIC,
+            MOCK_LIST_ADVANCED,
+            MOCK_INFO_001,
+            MOCK_INFO_002,
+            MOCK_INFO_003,
+        ]
+
+        mb = modelBank(self.cfg)
+        mb.set_models_ids("token123", lang="en")
+
+        # "nonexistent" not in any basic_info entry nor /info metadata
+        result = mb.describe_model("nonexistent", "token123", lang="en")
+        self.assertIsNone(result)
+
 
 if __name__ == "__main__":
     unittest.main()

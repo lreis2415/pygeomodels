@@ -1,14 +1,14 @@
 # Reference: https://github.com/jlowin/fastmcp?tab=readme-ov-file#-documentation
 
+import logging
 from typing import Optional
 
+import uvicorn
 from fastmcp import FastMCP
-import logging
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware import Middleware
-import uvicorn
 
 from auth_context import set_bearer_token
 from pygeomodels.config import parse_config
@@ -47,6 +47,13 @@ def ENABLE_TERRAIN_ANALYSIS_TOOLS():
 def ENABLE_MODEL_MANAGEMENT_TOOLS():
     cfg = get_feature_flags()
     return cfg.enable_model_management_tools
+
+
+# AOI研究区工具集开关
+# 设置为 True 时启用AOI工具，设置为 False 时禁用
+def ENABLE_AOI_TOOLS():
+    cfg = get_feature_flags()
+    return cfg.enable_aoi_tools
 
 
 def validate_api_key(api_key: Optional[str]) -> bool:
@@ -132,6 +139,12 @@ if ENABLE_MODEL_MANAGEMENT_TOOLS():
     from mcp_service.egc_service_tools import register_model_tools
 
     register_model_tools(mcp)
+
+# 根据开关条件导入AOI研究区工具集
+if ENABLE_AOI_TOOLS():
+    from mcp_service.aoi_tools import register_aoi_tools
+
+    register_aoi_tools(mcp)
 
 
 @mcp.tool()

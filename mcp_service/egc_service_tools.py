@@ -3,11 +3,11 @@
 
 from typing import Any, Dict, List, Optional
 
-from pygeomodels.modelBank import modelBank
-from pygeomodels.config import parse_config
-from pygeomodels.modelTask import modelTask
-from mcp_service.inner_api import get_required_bearer_token
 from auth_context import get_bearer_token
+from mcp_service.inner_api import get_required_bearer_token
+from pygeomodels.config import parse_config
+from pygeomodels.modelBank import modelBank
+from pygeomodels.modelTask import modelTask
 
 # 全局变量，用于存储配置和模型库
 cfg = None
@@ -45,7 +45,9 @@ def register_model_tools(mcp):
         return mb.get_categories(access_token, lang)
 
     @mcp.tool()
-    def list_models_by_category(category: str, lang: str = "en") -> List[Dict[str, Any]]:
+    def list_models_by_category(
+        category: str, lang: str = "en"
+    ) -> List[Dict[str, Any]]:
         """
         Returns a list of GIS models in a specific category with brief information.
 
@@ -58,7 +60,9 @@ def register_model_tools(mcp):
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.list_all_models(access_token, category=category, lang=lang)
+        return mb.list_all_models_lightweight(
+            access_token, category=category, lang=lang
+        )
 
     @mcp.tool()
     def describe_model(model_name: str, lang: str = "en") -> Optional[Dict[str, Any]]:

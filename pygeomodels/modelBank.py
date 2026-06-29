@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
-from pygeomodels.config import ModelEngineConfig
 from pygeomodels.api import restapi_get
+from pygeomodels.config import ModelEngineConfig
 from pygeomodels.modelCaller import ModelCaller
 
 
@@ -25,6 +25,9 @@ class modelBank(object):
         self._metadata_token = None
         self._metadata_lang: Optional[str] = None
         self._caller_token = None
+        self._models_basic_info: Dict[str, Dict[str, str]] = {}
+        self._basic_info_token: Optional[str] = None
+        self._basic_info_lang: Optional[str] = None
 
     def _resolve_token(
         self, access_token: Optional[str], *fallback_tokens: Optional[str]
@@ -71,19 +74,24 @@ class modelBank(object):
             self.cfg.api_cls_modelmanager,
             self.cfg.api_mgt_generalmodel,
             self.cfg.api_gm_catalogcls,
-            version_key='gm_catalog'
+            version_key="gm_catalog",
         )
         res = restapi_get(self.cfg.modelmanager_url, f"{path}?lang={lang}", token)
         if res is not None and (res["success"] == "true" or res["success"]):
             # v2 API returns nested structure: data.categories[].categories[]
             # Find the configured root catalog node and extract its child categories
             root_node = next(
-                (cat for cat in res.get("data", {}).get("categories", [])
-                 if cat.get("id") == self.cfg.api_gm_catalog_root_id),
-                None
+                (
+                    cat
+                    for cat in res.get("data", {}).get("categories", [])
+                    if cat.get("id") == self.cfg.api_gm_catalog_root_id
+                ),
+                None,
             )
             if root_node:
-                self._categories = [item["id"] for item in root_node.get("categories", [])]
+                self._categories = [
+                    item["id"] for item in root_node.get("categories", [])
+                ]
             else:
                 self._categories = []
         else:
@@ -100,25 +108,20 @@ class modelBank(object):
         self._metadata_lang = None
         self._models_caller = None
         self._caller_token = None
+        self._models_basic_info = {}
+        self._basic_info_token = None
+        self._basic_info_lang = None
 
     categories = property(get_categories, set_categories)
 
-    def get_models_ids(
-        self, access_token: Optional[str] = None, lang: str = "en"
-    ):
+    def get_models_ids(self, access_token: Optional[str] = None, lang: str = "en"):
         lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._ids_token)
-        if (
-            not self._models_ids
-            or self._ids_token != token
-            or self._ids_lang != lang
-        ):
+        if not self._models_ids or self._ids_token != token or self._ids_lang != lang:
             self.set_models_ids(token, lang)
         return self._models_ids
 
-    def set_models_ids(
-        self, access_token: Optional[str] = None, lang: str = "en"
-    ):
+    def set_models_ids(self, access_token: Optional[str] = None, lang: str = "en"):
         lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._ids_token)
         # Ensure categories are loaded with the same language
@@ -131,6 +134,7 @@ class modelBank(object):
 
         self._models_ids = []
         self._category_models = {}
+        self._models_basic_info = {}
         if not self._categories:
             self._load_models_by_category(None, token, lang)
         else:
@@ -139,6 +143,8 @@ class modelBank(object):
 
         self._ids_token = token
         self._ids_lang = lang
+        self._basic_info_token = token
+        self._basic_info_lang = lang
 
     def _load_models_by_category(
         self,
@@ -147,7 +153,7 @@ class modelBank(object):
         lang: str = "en",
     ) -> None:
         """
-        根据categoryId加载模型ID
+        根据categoryId加载模型ID，同时缓存 /list 返回的基础信息。
 
         Args:
             category_id: 类别ID，如果为None则获取所有模型
@@ -160,7 +166,7 @@ class modelBank(object):
             self.cfg.api_cls_modelmanager,
             self.cfg.api_mgt_singlemodel,
             self.cfg.api_sm_list,
-            version_key='sm_list'
+            version_key="sm_list",
         )
         res = restapi_get(
             self.cfg.modelmanager_url,
@@ -176,7 +182,17 @@ class modelBank(object):
                     if model_id not in self._models_ids:
                         self._models_ids.append(model_id)
                     if category_id:
-                        self._category_models.setdefault(category_id, []).append(model_id)
+                        self._category_models.setdefault(category_id, []).append(
+                            model_id
+                        )
+                    # 缓存 /list 返回的基础信息，避免后续对 /info 的大规模串行调用
+                    identification = model.get("identification", {}) or {}
+                    self._models_basic_info[model_id] = {
+                        "display_name": identification.get("model_name", ""),
+                        "description": identification.get("description", ""),
+                        "model_unique_abbr": model.get("model_unique_abbr", ""),
+                        "category_name": model.get("categoryName", ""),
+                    }
             else:
                 print(
                     f'Get models list for category "{category_id}" failed!\nError message: {res["message"]}'
@@ -186,9 +202,7 @@ class modelBank(object):
 
     models_ids = property(get_models_ids, set_models_ids)
 
-    def get_models_metadata(
-        self, access_token: Optional[str] = None, lang: str = "en"
-    ):
+    def get_models_metadata(self, access_token: Optional[str] = None, lang: str = "en"):
         lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
         if (
@@ -199,16 +213,10 @@ class modelBank(object):
             self.set_models_metadata(token, lang)
         return self._models_metadata
 
-    def set_models_metadata(
-        self, access_token: Optional[str] = None, lang: str = "en"
-    ):
+    def set_models_metadata(self, access_token: Optional[str] = None, lang: str = "en"):
         lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
-        if (
-            not self._models_ids
-            or self._ids_token != token
-            or self._ids_lang != lang
-        ):
+        if not self._models_ids or self._ids_token != token or self._ids_lang != lang:
             self.set_models_ids(token, lang)
 
         self._models_metadata = {}
@@ -301,6 +309,60 @@ class modelBank(object):
                     ),
                 }
             )
+        return models_list
+
+    def list_all_models_lightweight(
+        self,
+        access_token: Optional[str] = None,
+        category: Optional[str] = None,
+        lang: str = "en",
+    ) -> List[Dict[str, Any]]:
+        """
+        使用 /list 缓存数据返回模型列表，不调用 /info 接口（只需 1 个 /list 请求）。
+
+        相比 list_all_models()，此方法避免了对每个模型串行调用 /info，
+        大幅减少 HTTP 请求数量和响应时间。
+
+        Note: 当 /list 接口已包含 model_unique_abbr 字段时，此方法也会返回该字段。
+
+        Args:
+            access_token: 访问令牌
+            category: 类别过滤，None 表示全部模型
+            lang: 返回内容语言，'cn' 或 'en'
+
+        Returns:
+            [{"model_id": "...", "display_name": "...", "description": "..."}, ...]
+        """
+        lang = self._normalize_lang(lang)
+        token = self._resolve_token(access_token, self._ids_token)
+        if (
+            self._basic_info_token is None
+            or self._basic_info_token != token
+            or self._basic_info_lang != lang
+        ):
+            self.set_models_ids(token, lang)
+
+        if category:
+            model_ids = set(self._category_models.get(category, []))
+        else:
+            model_ids = None
+
+        models_list = []
+        for m_id, m_data in self._models_basic_info.items():
+            if model_ids is not None and m_id not in model_ids:
+                continue
+            model_entry: Dict[str, Any] = {
+                "model_id": m_id,
+                "display_name": m_data.get("display_name", ""),
+                "description": m_data.get("description", ""),
+            }
+            abbr = m_data.get("model_unique_abbr", "")
+            if abbr:
+                model_entry["model_unique_abbr"] = abbr
+            category_name = m_data.get("category_name", "")
+            if category_name:
+                model_entry["category_name"] = category_name
+            models_list.append(model_entry)
         return models_list
 
     def describe_model(

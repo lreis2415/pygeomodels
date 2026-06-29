@@ -15,12 +15,15 @@ class modelBank(object):
         self.cfg = cfg
         self._categories: Optional[List[str]] = None
         self._categories_token: Optional[str] = None
+        self._categories_lang: Optional[str] = None
         self._models_ids = list()
         self._category_models: Dict[str, List[str]] = {}
         self._models_metadata = dict()
         self._models_caller = None
         self._ids_token = None
+        self._ids_lang: Optional[str] = None
         self._metadata_token = None
+        self._metadata_lang: Optional[str] = None
         self._caller_token = None
 
     def _resolve_token(
@@ -33,13 +36,35 @@ class modelBank(object):
                 return str(token).strip()
         raise ValueError("access_token is required")
 
-    def get_categories(self, access_token: Optional[str] = None) -> List[str]:
+    @staticmethod
+    def _normalize_lang(lang: Optional[str]) -> str:
+        """Normalize the language code used for localized API responses.
+
+        Only 'cn' (Chinese) and 'en' (English) are supported. Anything else
+        (None, empty, unknown values) falls back to 'en'.
+        """
+        if lang is None:
+            return "en"
+        normalized = str(lang).strip().lower()
+        return normalized if normalized in ("cn", "en") else "en"
+
+    def get_categories(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ) -> List[str]:
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._categories_token)
-        if self._categories is None or self._categories_token != token:
-            self.set_categories(token)
+        if (
+            self._categories is None
+            or self._categories_token != token
+            or self._categories_lang != lang
+        ):
+            self.set_categories(token, lang)
         return self._categories
 
-    def set_categories(self, access_token: Optional[str] = None) -> None:
+    def set_categories(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ) -> None:
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._categories_token)
         # Use v2 API for catalog endpoints
         path = self.cfg.build_api_path(
@@ -48,7 +73,7 @@ class modelBank(object):
             self.cfg.api_gm_catalogcls,
             version_key='gm_catalog'
         )
-        res = restapi_get(self.cfg.modelmanager_url, path, token)
+        res = restapi_get(self.cfg.modelmanager_url, f"{path}?lang={lang}", token)
         if res is not None and (res["success"] == "true" or res["success"]):
             # v2 API returns nested structure: data.categories[].categories[]
             # Find the configured root catalog node and extract its child categories
@@ -65,58 +90,81 @@ class modelBank(object):
             print("Get categories list failed!")
             self._categories = []
         self._categories_token = token
+        self._categories_lang = lang
         # Invalidate downstream caches since categories may have changed
         self._models_ids = []
         self._ids_token = None
+        self._ids_lang = None
         self._models_metadata = {}
         self._metadata_token = None
+        self._metadata_lang = None
         self._models_caller = None
         self._caller_token = None
 
     categories = property(get_categories, set_categories)
 
-    def get_models_ids(self, access_token: Optional[str] = None):
+    def get_models_ids(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ):
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._ids_token)
-        if not self._models_ids or self._ids_token != token:
-            self.set_models_ids(token)
+        if (
+            not self._models_ids
+            or self._ids_token != token
+            or self._ids_lang != lang
+        ):
+            self.set_models_ids(token, lang)
         return self._models_ids
 
-    def set_models_ids(self, access_token: Optional[str] = None):
+    def set_models_ids(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ):
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._ids_token)
-        # Ensure categories are loaded
-        if self._categories is None or self._categories_token != token:
-            self.set_categories(token)
+        # Ensure categories are loaded with the same language
+        if (
+            self._categories is None
+            or self._categories_token != token
+            or self._categories_lang != lang
+        ):
+            self.set_categories(token, lang)
 
         self._models_ids = []
         self._category_models = {}
         if not self._categories:
-            self._load_models_by_category(None, token)
+            self._load_models_by_category(None, token, lang)
         else:
             for category_id in self._categories:
-                self._load_models_by_category(category_id, token)
+                self._load_models_by_category(category_id, token, lang)
 
         self._ids_token = token
+        self._ids_lang = lang
 
     def _load_models_by_category(
-        self, category_id: Optional[str], access_token: str
+        self,
+        category_id: Optional[str],
+        access_token: str,
+        lang: str = "en",
     ) -> None:
         """
         根据categoryId加载模型ID
 
         Args:
             category_id: 类别ID，如果为None则获取所有模型
+            lang: 返回内容的语言，'cn' 或 'en'，默认 'en'
         """
+        lang = self._normalize_lang(lang)
         category_param = f"categoryId={category_id}" if category_id else "categoryId="
+        # Use v2 API for model list endpoint
+        path = self.cfg.build_api_path(
+            self.cfg.api_cls_modelmanager,
+            self.cfg.api_mgt_singlemodel,
+            self.cfg.api_sm_list,
+            version_key='sm_list'
+        )
         res = restapi_get(
             self.cfg.modelmanager_url,
-            "%s/%s/%s/%s%s"
-            % (
-                self.cfg.api_basename,
-                self.cfg.api_cls_modelmanager,
-                self.cfg.api_mgt_singlemodel,
-                self.cfg.api_sm_list,
-                f"?modelName=&description=&{category_param}&semantic=&auditStatus=&page=&size=40",
-            ),
+            f"{path}?modelName=&description=&{category_param}&semantic=&auditStatus=&page=&size=40&lang={lang}",
             access_token,
         )
         if res is not None:
@@ -138,29 +186,44 @@ class modelBank(object):
 
     models_ids = property(get_models_ids, set_models_ids)
 
-    def get_models_metadata(self, access_token: Optional[str] = None):
+    def get_models_metadata(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ):
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
-        if not self._models_metadata or self._metadata_token != token:
-            self.set_models_metadata(token)
+        if (
+            not self._models_metadata
+            or self._metadata_token != token
+            or self._metadata_lang != lang
+        ):
+            self.set_models_metadata(token, lang)
         return self._models_metadata
 
-    def set_models_metadata(self, access_token: Optional[str] = None):
+    def set_models_metadata(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ):
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
-        if not self._models_ids or self._ids_token != token:
-            self.set_models_ids(token)
+        if (
+            not self._models_ids
+            or self._ids_token != token
+            or self._ids_lang != lang
+        ):
+            self.set_models_ids(token, lang)
 
         self._models_metadata = {}
         for m_id in self._models_ids:
-            # mbms/v1/model-manager/general-single-models/{id}/info
+            # mbms/v1/model-manager/general-single-models/{id}/info?lang={lang}
             res = restapi_get(
                 self.cfg.modelmanager_url,
-                "%s/%s/%s/%s/%s"
+                "%s/%s/%s/%s/%s?lang=%s"
                 % (
                     self.cfg.api_basename,
                     self.cfg.api_cls_modelmanager,
                     self.cfg.api_mgt_singlemodel,
                     m_id,
                     self.cfg.api_sm_info,
+                    lang,
                 ),
                 token,
             )
@@ -170,6 +233,7 @@ class modelBank(object):
                 self._models_metadata[m_id] = res["data"]
 
         self._metadata_token = token
+        self._metadata_lang = lang
         self._models_caller = None
         self._caller_token = None
 
@@ -205,10 +269,20 @@ class modelBank(object):
 
         return template
 
-    def list_all_models(self, access_token: Optional[str] = None, category: Optional[str] = None):
+    def list_all_models(
+        self,
+        access_token: Optional[str] = None,
+        category: Optional[str] = None,
+        lang: str = "en",
+    ):
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
-        if not self._models_metadata or self._metadata_token != token:
-            self.set_models_metadata(token)
+        if (
+            not self._models_metadata
+            or self._metadata_token != token
+            or self._metadata_lang != lang
+        ):
+            self.set_models_metadata(token, lang)
 
         if category:
             model_ids = set(self._category_models.get(category, []))
@@ -230,11 +304,19 @@ class modelBank(object):
         return models_list
 
     def describe_model(
-        self, model_name: str, access_token: Optional[str] = None
+        self,
+        model_name: str,
+        access_token: Optional[str] = None,
+        lang: str = "en",
     ) -> Optional[Dict[str, Any]]:
+        lang = self._normalize_lang(lang)
         token = self._resolve_token(access_token, self._metadata_token, self._ids_token)
-        if not self._models_metadata or self._metadata_token != token:
-            self.set_models_metadata(token)
+        if (
+            not self._models_metadata
+            or self._metadata_token != token
+            or self._metadata_lang != lang
+        ):
+            self.set_models_metadata(token, lang)
 
         for _, model_data in self._models_metadata.items():
             if model_data.get("model_unique_abbr", "") == model_name:

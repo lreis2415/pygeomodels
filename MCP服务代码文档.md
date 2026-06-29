@@ -7,9 +7,12 @@ PyGeoModels MCP服务是一个基于FastMCP框架的地理模型调用服务，�
 ## 核心功能
 
 ### 1. 模型管理
-- **list_categories()**: 列出所有可用的模型类别
-- **list_models_by_category(category)**: 列出指定类别下的所有地理模型
-- **describe_model(model_name)**: 获取指定模型的详细参数定义
+- **list_categories(lang)**: 列出所有可用的模型类别
+- **list_models_by_category(category, lang)**: 列出指定类别下的所有地理模型
+- **describe_model(model_name, lang)**: 获取指定模型的详细参数定义
+
+**参数说明**:
+- `lang` (可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`。无效值自动回退到 `en`
 
 ### 2. 任务执行
 - **run_model(request_body)**: 提交地理模型任务
@@ -36,12 +39,15 @@ graph TD
 
 > 💡 **基础配置**: 所有API基于 `http://localhost:7504/mbms/v1` 构建（可在 `default_config.ini` 中配置）
 
-#### 1. list_categories() - 获取模型类别
+#### 1. list_categories(lang) - 获取模型类别
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categories
+GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categories?lang={lang}
 ```
+
+**参数**:
+- `lang` (可选): `cn` 或 `en`，默认 `en`
 
 **实现位置**: `pygeomodels/modelBank.py` - `set_categories()`
 
@@ -60,7 +66,7 @@ GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categorie
 
 ---
 
-#### 2. list_models_by_category(category) - 获取指定类别的模型列表
+#### 2. list_models_by_category(category, lang) - 获取指定类别的模型列表
 
 这是一个**复合操作**，涉及两个EGC API调用：
 
@@ -68,8 +74,12 @@ GET http://localhost:7504/mbms/v2/model-manager/general-models/catalog/categorie
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v2/model-manager/general-single-models/list?categoryId=basic&modelName=&description=&semantic=&auditStatus=&page=&size=40
+GET http://localhost:7504/mbms/v2/model-manager/general-single-models/list?categoryId=basic&modelName=&description=&semantic=&auditStatus=&page=&size=40&lang={lang}
 ```
+
+**参数**:
+- `categoryId`: 类别ID
+- `lang` (可选): `cn` 或 `en`，默认 `en`
 
 **实现位置**: `pygeomodels/modelBank.py` - `_load_models_by_category()`
 
@@ -77,20 +87,27 @@ GET http://localhost:7504/mbms/v2/model-manager/general-single-models/list?categ
 
 **实际路径** (对每个模型ID):
 ```
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/slopeAnalysis/info
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info?lang={lang}
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/slopeAnalysis/info?lang={lang}
 ```
+
+**参数**:
+- `lang` (可选): `cn` 或 `en`，默认 `en`
 
 **实现位置**: `pygeomodels/modelBank.py` - `set_models_metadata()`
 
 ---
 
-#### 3. describe_model(model_name) - 获取模型详细元数据
+#### 3. describe_model(model_name, lang) - 获取模型详细元数据
 
 **实际路径**:
 ```
-GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info
+GET http://localhost:7504/mbms/v1/model-manager/general-single-models/pitRemove/info?lang={lang}
 ```
+
+**参数**:
+- `model_name`: 模型唯一标识符
+- `lang` (可选): `cn` 或 `en`，默认 `en`
 
 **实现位置**: `pygeomodels/modelBank.py` - `describe_model()`
 
@@ -158,14 +175,17 @@ Token获取方式：
 
 为优化性能，`modelBank` 实现了多层缓存：
 
-| 缓存项 | 说明 |
-|--------|------|
-| 模型类别 | 缓存类别列表 |
-| 模型ID列表 | 缓存所有模型ID |
-| 类别-模型映射 | 缓存类别与模型的关系 |
-| 模型元数据 | 缓存每个模型的详细信息 |
+| 缓存项 | 说明 | 缓存键 |
+|--------|------|--------|
+| 模型类别 | 缓存类别列表 | (token, lang) |
+| 模型ID列表 | 缓存所有模型ID | (token, lang) |
+| 类别-模型映射 | 缓存类别与模型的关系 | (token, lang) |
+| 模型元数据 | 缓存每个模型的详细信息 | (token, lang) |
 
-**缓存失效条件**: Token变化时，所有相关缓存失效
+**缓存失效条件**: 
+- Token 变化时，所有相关缓存失效
+- 语言（`lang`）变化时，所有相关缓存失效并重新获取本地化内容
+- 确保切换语言后返回正确的本地化描述，不会出现旧语言的残留数据
 
 
 ## 对LLM调用的适用性评估

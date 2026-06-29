@@ -33,37 +33,45 @@ def register_model_tools(mcp):
             mb = modelBank(cfg)
 
     @mcp.tool()
-    def list_categories() -> List[str]:
+    def list_categories(lang: str = "en") -> List[str]:
         """
         Returns all available model categories.
+
+        Args:
+            lang: Response language, 'cn' for Chinese or 'en' for English. Defaults to 'en'.
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.get_categories(access_token)
+        return mb.get_categories(access_token, lang)
 
     @mcp.tool()
-    def list_models_by_category(category: str) -> List[Dict[str, Any]]:
+    def list_models_by_category(category: str, lang: str = "en") -> List[Dict[str, Any]]:
         """
         Returns a list of GIS models in a specific category with brief information.
 
         Args:
             category: The category name to query. Use 'list_categories' to discover available values.
+            lang: Response language, 'cn' for Chinese or 'en' for English. Defaults to 'en'.
 
         Returns:
             List of models with their names and descriptions in the specified category.
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.list_all_models(access_token, category=category)
+        return mb.list_all_models(access_token, category=category, lang=lang)
 
     @mcp.tool()
-    def describe_model(model_name: str) -> Optional[Dict[str, Any]]:
+    def describe_model(model_name: str, lang: str = "en") -> Optional[Dict[str, Any]]:
         """
         Returns model description and parameter info using model_name (model_unique_abbr).
+
+        Args:
+            model_name: The unique model abbreviation to describe.
+            lang: Response language, 'cn' for Chinese or 'en' for English. Defaults to 'en'.
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.describe_model(model_name, access_token)
+        return mb.describe_model(model_name, access_token, lang)
 
     @mcp.tool()
     def run_model(request_body: Dict[str, Any]) -> Optional[str]:

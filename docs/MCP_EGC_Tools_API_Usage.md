@@ -17,6 +17,9 @@ MCP EGC工具的正确使用流程是：
 ### 1. list_categories()
 **作用**: 获取所有可用的模型类别
 
+**参数**:
+- `lang` (str, 可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`
+
 **返回**: `List[str]` - 类别名称列表
 
 **示例**:
@@ -27,7 +30,7 @@ MCP EGC工具的正确使用流程是：
   "method": "tools/call",
   "params": {
     "name": "list_categories",
-    "arguments": {}
+    "arguments": {"lang": "en"}
   }
 }
 ```
@@ -46,6 +49,7 @@ MCP EGC工具的正确使用流程是：
 
 **参数**:
 - `category` (str, 必填): 模型类别名称
+- `lang` (str, 可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`
 
 **返回**: `List[Dict]` - 模型列表，每个模型包含：
 - `model_name`: 模型唯一标识符
@@ -60,7 +64,8 @@ MCP EGC工具的正确使用流程是：
   "params": {
     "name": "list_models_by_category",
     "arguments": {
-      "category": "basic"
+      "category": "basic",
+      "lang": "en"
     }
   }
 }
@@ -89,6 +94,7 @@ MCP EGC工具的正确使用流程是：
 
 **参数**:
 - `model_name` (str, 必填): 模型唯一标识符
+- `lang` (str, 可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`
 
 **返回**: `Dict` - 模型详细信息，包括输入/输出参数定义
 
@@ -101,7 +107,8 @@ MCP EGC工具的正确使用流程是：
   "params": {
     "name": "describe_model",
     "arguments": {
-      "model_name": "pitRemove"
+      "model_name": "pitRemove",
+      "lang": "cn"
     }
   }
 }
@@ -209,10 +216,16 @@ print(f"任务ID: {project_id}")
 2. **模型名称**: 使用 `model_name` (model_unique_abbr) 而不是其他标识符
 3. **认证**: 所有调用都需要有效的 Bearer token
 4. **错误处理**: 检查响应中的错误信息并适当处理
+5. **语言参数**: `lang` 参数可选，支持 `cn`（中文）和 `en`（英文），默认 `en`。无效值回退到 `en`
+6. **缓存机制**: 系统按 token 和 lang 缓存结果。切换语言时自动刷新缓存，确保返回正确的本地化内容
 
 ---
 
 ## 📝 API变更历史
+
+### 2026-06-29
+- **新增参数**: `list_categories`、`list_models_by_category`、`describe_model` 增加 `lang` 参数（默认 `en`）
+- **缓存增强**: 缓存现在同时按 token 和 lang 存储，语言切换时自动刷新
 
 ### 2025-06-28
 - **重命名**: `list_models` → `list_models_by_category`

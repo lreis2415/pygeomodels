@@ -128,6 +128,9 @@ class ModelEngineConfig(object):
         self.api_version_gm_catalog = get_option_value(
             cf, service, 'api_version_gm_catalog', valtyp=str, defvalue='', required=False
         )
+        self.api_version_sm_list = get_option_value(
+            cf, service, 'api_version_sm_list', valtyp=str, defvalue='', required=False
+        )
         self.api_version_sm_ui = get_option_value(
             cf, service, 'api_version_sm_ui', valtyp=str, defvalue='', required=False
         )

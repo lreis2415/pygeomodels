@@ -213,7 +213,7 @@ class modelBank(object):
 
         self._models_metadata = {}
         for m_id in self._models_ids:
-            # mbms/v1/model-manager/general-single-models/{id}/info?lang={lang}
+            # Model info API uses v1 /info endpoint
             res = restapi_get(
                 self.cfg.modelmanager_url,
                 "%s/%s/%s/%s/%s?lang=%s"

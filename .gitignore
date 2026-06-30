@@ -73,3 +73,6 @@ tmp_results
 
 # Local configuration files
 local_config.ini
+
+# Local research notes (not tracked)
+docs/research-summary-*.md

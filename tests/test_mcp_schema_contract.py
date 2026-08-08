@@ -42,6 +42,13 @@ class TestMCPToolSchemaContract(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request_schema["properties"]["inputs"]["minProperties"], 1)
         self.assertEqual(request_schema["properties"]["outputs"]["minProperties"], 1)
 
+    async def test_list_categories_output_is_structured(self):
+        schema = self.tools["list_categories"].output_schema
+        item_schema = schema["properties"]["result"]["items"]
+        self.assertIn("category_id", item_schema["properties"])
+        self.assertIn("name", item_schema["properties"])
+        self.assertIn("description", item_schema["properties"])
+
     async def test_language_and_coordinate_constraints_are_visible(self):
         lang_schema = self.tools["list_categories"].parameters["properties"]["lang"]
 

@@ -47,6 +47,14 @@ class ModelSummary(MCPModel):
     category_name: str | None = Field(default=None, description="Model category.")
 
 
+class CategorySummary(MCPModel):
+    """Stable lightweight category metadata returned by category discovery."""
+
+    category_id: NonEmptyId = Field(description="Backend category identifier.")
+    name: str = Field(default="", description="Localized category name.")
+    description: str = Field(default="", description="Localized category description.")
+
+
 class ModelParameter(MCPModel):
     """Normalized model parameter metadata used for dynamic validation."""
 

@@ -14,6 +14,7 @@ class modelBank(object):
     def __init__(self, cfg: ModelEngineConfig):
         self.cfg = cfg
         self._categories: Optional[List[str]] = None
+        self._categories_info: Optional[List[Dict[str, str]]] = None
         self._categories_token: Optional[str] = None
         self._categories_lang: Optional[str] = None
         self._models_ids = list()
@@ -64,6 +65,28 @@ class modelBank(object):
             self.set_categories(token, lang)
         return self._categories
 
+    def get_categories_info(
+        self, access_token: Optional[str] = None, lang: str = "en"
+    ) -> List[Dict[str, str]]:
+        """Return category metadata (id, name, description) for the catalog.
+
+        The v2 catalog API exposes localized name/description per category
+        node; this method returns them alongside the category id so clients
+        can render a meaningful category list without extra lookups.
+
+        Returns:
+            [{"category_id": ..., "name": ..., "description": ...}, ...]
+        """
+        lang = self._normalize_lang(lang)
+        token = self._resolve_token(access_token, self._categories_token)
+        if (
+            self._categories_info is None
+            or self._categories_token != token
+            or self._categories_lang != lang
+        ):
+            self.set_categories(token, lang)
+        return self._categories_info
+
     def set_categories(
         self, access_token: Optional[str] = None, lang: str = "en"
     ) -> None:
@@ -92,14 +115,26 @@ class modelBank(object):
                 None,
             )
             if root_node:
+                category_nodes = root_node.get("categories", [])
                 self._categories = [
-                    item["id"] for item in root_node.get("categories", [])
+                    item["id"] for item in category_nodes if item.get("id")
+                ]
+                self._categories_info = [
+                    {
+                        "category_id": item["id"],
+                        "name": item.get("name", ""),
+                        "description": item.get("description", ""),
+                    }
+                    for item in category_nodes
+                    if item.get("id")
                 ]
             else:
                 self._categories = []
+                self._categories_info = []
         else:
             print("Get categories list failed!")
             self._categories = []
+            self._categories_info = []
         self._categories_token = token
         self._categories_lang = lang
         # Invalidate downstream caches since categories may have changed

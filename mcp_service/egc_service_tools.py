@@ -10,6 +10,7 @@ from pygeomodels.modelTask import modelTask
 
 from mcp_service.inner_api import get_required_bearer_token
 from mcp_service.schemas import (
+    CategorySummary,
     Lang,
     ModelDescription,
     ModelParameter,
@@ -212,16 +213,23 @@ def register_model_tools(mcp):
             readOnlyHint=True, idempotentHint=True, openWorldHint=True
         )
     )
-    def list_categories(lang: Lang = "en") -> list[str]:
+    def list_categories(lang: Lang = "en") -> list[CategorySummary]:
         """
-        Returns all available model categories.
+        Returns all available model categories with localized names and descriptions.
 
         Args:
             lang: Response language, 'cn' for Chinese or 'en' for English. Defaults to 'en'.
+
+        Returns:
+            List of categories; each item contains category_id, name and description.
+            Pass category_id to 'list_models_by_category'.
         """
         initialize()
         access_token = get_required_bearer_token()
-        return mb.get_categories(access_token, lang)
+        return [
+            CategorySummary.model_validate(item)
+            for item in mb.get_categories_info(access_token, lang)
+        ]
 
     @mcp.tool(
         annotations=ToolAnnotations(

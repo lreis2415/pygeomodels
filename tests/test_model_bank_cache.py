@@ -67,8 +67,16 @@ MOCK_CATEGORIES = {
             {
                 "id": "modelbank-dev",
                 "categories": [
-                    {"id": "basic"},
-                    {"id": "advanced"},
+                    {
+                        "id": "basic",
+                        "name": "Basic",
+                        "description": "Basic models",
+                    },
+                    {
+                        "id": "advanced",
+                        "name": "Advanced",
+                        "description": "Advanced models",
+                    },
                 ],
             }
         ]
@@ -178,6 +186,33 @@ class TestModelBankLightweightCache(unittest.TestCase):
 
     def setUp(self):
         self.cfg = _make_mock_cfg()
+
+    @patch("pygeomodels.modelBank.restapi_get")
+    def test_categories_info_structured(self, mock_get):
+        """get_categories_info should return id/name/description per category."""
+        mock_get.side_effect = [MOCK_CATEGORIES]
+
+        mb = modelBank(self.cfg)
+        info = mb.get_categories_info("token123", lang="en")
+
+        self.assertEqual(
+            info,
+            [
+                {
+                    "category_id": "basic",
+                    "name": "Basic",
+                    "description": "Basic models",
+                },
+                {
+                    "category_id": "advanced",
+                    "name": "Advanced",
+                    "description": "Advanced models",
+                },
+            ],
+        )
+
+        # Backward compatibility: get_categories still returns plain ids
+        self.assertEqual(mb.get_categories("token123", lang="en"), ["basic", "advanced"])
 
     @patch("pygeomodels.modelBank.restapi_get")
     def test_categories_prefix_match_v2(self, mock_get):

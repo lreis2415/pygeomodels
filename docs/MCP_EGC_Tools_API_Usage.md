@@ -15,12 +15,15 @@ MCP EGC工具的正确使用流程是：
 ## 📋 工具详解
 
 ### 1. list_categories()
-**作用**: 获取所有可用的模型类别
+**作用**: 获取所有可用的模型类别（含本地化的名称和描述）
 
 **参数**:
 - `lang` (str, 可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`
 
-**返回**: `List[str]` - 类别名称列表
+**返回**: `List[CategorySummary]` - 类别列表，每个类别包含：
+- `category_id`: 类别 ID，传给 `list_models_by_category` 使用
+- `name`: 本地化类别名称
+- `description`: 本地化类别描述
 
 **示例**:
 ```json
@@ -38,9 +41,23 @@ MCP EGC工具的正确使用流程是：
 **响应示例**:
 ```json
 {
-  "result": ["basic", "interpolation", "topographic_attribute", "hydrology_analysis"]
+  "result": [
+    {
+      "category_id": "basic",
+      "name": "Basic",
+      "description": "Basic models"
+    },
+    {
+      "category_id": "interpolation",
+      "name": "Interpolation",
+      "description": "Interpolation models"
+    }
+  ]
 }
 ```
+
+> 提示：旧版本的 `list_categories` 返回纯字符串列表（类别 ID）。升级后请从
+> `result[].category_id` 读取类别 ID，从 `result[].name` 读取显示名称。
 
 ---
 
@@ -250,6 +267,13 @@ print(f"任务ID: {project_id}")
 - **动态参数校验**: `describe_model` 元数据用于提交前校验模型参数名和必填项。
 - **结构化任务结果**: 任务状态、日志和模型提交结果统一为结构化对象。
 - **迁移提示**: 旧客户端需将 `request_body` 改为 `request`，并从 `result.project_id` 读取项目 ID。
+
+### 2026-08-08 (v2 catalog)
+- **结构化类别**: `list_categories` 从 `List[str]` 升级为 `List[CategorySummary]`，每项含
+  `category_id` / `name` / `description`（v2 catalog 接口本地化字段）。
+- **根节点前缀匹配**: v2 catalog 顶层节点 id 带环境后缀（如 `modelbank-dev`），
+  按配置的根 id（`modelbank`）做前缀匹配定位。
+- **迁移提示**: 旧客户端从 `result`（字符串数组）改为 `result[].category_id` / `result[].name`。
 
 ### 2025-06-28
 - **重命名**: `list_models` → `list_models_by_category`

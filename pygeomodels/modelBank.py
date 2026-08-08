@@ -79,12 +79,15 @@ class modelBank(object):
         res = restapi_get(self.cfg.modelmanager_url, f"{path}?lang={lang}", token)
         if res is not None and (res["success"] == "true" or res["success"]):
             # v2 API returns nested structure: data.categories[].categories[]
-            # Find the configured root catalog node and extract its child categories
+            # Find the configured root catalog node by prefix matching, because
+            # the real node id may carry an environment suffix
+            # (e.g. configured 'modelbank' matches node 'modelbank-dev').
+            root_prefix = self.cfg.api_gm_catalog_root_id
             root_node = next(
                 (
                     cat
                     for cat in res.get("data", {}).get("categories", [])
-                    if cat.get("id") == self.cfg.api_gm_catalog_root_id
+                    if root_prefix and cat.get("id", "").startswith(root_prefix)
                 ),
                 None,
             )

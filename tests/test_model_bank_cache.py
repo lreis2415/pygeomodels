@@ -58,12 +58,14 @@ def _make_mock_cfg():
 
 
 # Sample mock API responses
+# v2 catalog: root node id carries an environment suffix ('modelbank-dev'),
+# the code matches it by prefix ('modelbank') against api_gm_catalog_root_id.
 MOCK_CATEGORIES = {
     "success": "true",
     "data": {
         "categories": [
             {
-                "id": "modelbank",
+                "id": "modelbank-dev",
                 "categories": [
                     {"id": "basic"},
                     {"id": "advanced"},
@@ -176,6 +178,47 @@ class TestModelBankLightweightCache(unittest.TestCase):
 
     def setUp(self):
         self.cfg = _make_mock_cfg()
+
+    @patch("pygeomodels.modelBank.restapi_get")
+    def test_categories_prefix_match_v2(self, mock_get):
+        """v2 catalog: root node id may carry an environment suffix
+        (e.g. 'modelbank-dev'); prefix matching must still find it."""
+        v2_categories = {
+            "success": True,
+            "message": "succ",
+            "data": {
+                "id": "root",
+                "language": "en",
+                "name": "General Model Bank",
+                "description": None,
+                "parentId": None,
+                "categories": [
+                    {
+                        "id": "modelbank-dev",
+                        "language": "en",
+                        "name": "Root",
+                        "description": "root",
+                        "parentId": "root",
+                        "categories": [
+                            {
+                                "id": "sampling",
+                                "name": "Spatiotemporal Sampling",
+                                "categories": [],
+                            },
+                            {"id": "basic", "categories": []},
+                        ],
+                    }
+                ],
+            },
+        }
+        mock_get.side_effect = [v2_categories]
+
+        mb = modelBank(self.cfg)
+        categories = mb.get_categories("token123", lang="en")
+
+        self.assertEqual(categories, ["sampling", "basic"])
+        mock_get.assert_called_once()
+
 
     @patch("pygeomodels.modelBank.restapi_get")
     def test_basic_info_populated_from_list(self, mock_get):

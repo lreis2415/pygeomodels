@@ -8,7 +8,7 @@ MCP EGC工具的正确使用流程是：
 1. list_categories() → 获取所有可用类别
 2. list_models_by_category(category) → 获取指定类别下的所有模型
 3. describe_model(model_name) → 获取特定模型的详细元数据
-4. run_model(request_body) → 运行选定的模型
+4. run_model(request) → 运行选定的模型
 5. get_task_status(project_id) → 查询任务执行状态
 ```
 
@@ -51,9 +51,12 @@ MCP EGC工具的正确使用流程是：
 - `category` (str, 必填): 模型类别名称
 - `lang` (str, 可选): 返回内容的语言，`cn` 为中文，`en` 为英文，默认 `en`
 
-**返回**: `List[Dict]` - 模型列表，每个模型包含：
-- `model_name`: 模型唯一标识符
-- `model_description`: 模型描述
+**返回**: `List[ModelSummary]` - 模型列表，每个模型包含：
+- `model_id`: 后端模型 ID
+- `model_unique_abbr`: 可传给 `describe_model` 和 `run_model` 的模型缩写（可能为空）
+- `display_name`: 显示名称
+- `description`: 简要描述
+- `category_name`: 所属类别（可能为空）
 
 **示例**:
 ```json
@@ -76,12 +79,18 @@ MCP EGC工具的正确使用流程是：
 {
   "result": [
     {
-      "model_name": "pitRemove",
-      "model_description": "Remove sinks from DEM"
+      "model_id": "model-001",
+      "model_unique_abbr": "pitRemove",
+      "display_name": "Pit removal",
+      "description": "Remove sinks from DEM",
+      "category_name": "basic"
     },
     {
-      "model_name": "slopeAnalysis",
-      "model_description": "Calculate slope from DEM"
+      "model_id": "model-002",
+      "model_unique_abbr": "slopeAnalysis",
+      "display_name": "Slope analysis",
+      "description": "Calculate slope from DEM",
+      "category_name": "basic"
     }
   ]
 }
@@ -116,18 +125,25 @@ MCP EGC工具的正确使用流程是：
 
 ---
 
-### 4. run_model(request_body)
+### 4. run_model(request)
 **作用**: 提交地理模型任务执行
 
 **参数**:
-- `request_body` (Dict, 必填): 任务请求体
-  - `model_name` (str): 模型名称，必填
-  - `inputs` (Dict): 输入数据路径，必填
-  - `params` (Dict): 模型参数，可选
-  - `outputs` (Dict): 输出数据路径，必填
+- `request` (RunModelRequest, 必填): 任务请求体
+  - `model_name` (str): 模型缩写，必填
+  - `inputs` (Dict[str, JSON]): 输入参数，至少一个
+  - `params` (Dict[str, JSON]): 模型参数，可选
+  - `outputs` (Dict[str, JSON]): 输出参数，至少一个
   - `task_name` (str): 任务名称，可选
 
-**返回**: `str` - 项目ID (project_id)，用于后续状态查询
+`inputs`、`params` 和 `outputs` 的键必须来自 `describe_model` 返回的
+`parameter_info.parameters[].arg_name`。值保持 JSON 类型，以兼容不同 GIS 模型的参数类型；服务端会在提交前依据模型元数据校验参数名和必填项。
+
+**返回**: `RunModelResult` - 包含项目 ID：
+
+```json
+{"project_id": "proj_12345"}
+```
 
 **示例**:
 ```json
@@ -138,7 +154,7 @@ MCP EGC工具的正确使用流程是：
   "params": {
     "name": "run_model",
     "arguments": {
-      "request_body": {
+      "request": {
         "model_name": "pitRemove",
         "inputs": {
           "dem": "/path/to/input_dem.tif"
@@ -189,7 +205,7 @@ print(f"可用类别: {categories}")
 
 # Step 2: 查看特定类别下的模型
 models = call_mcp("list_models_by_category", {"category": "basic"})["result"]
-print(f"basic类别模型: {[m['model_name'] for m in models]}")
+print(f"basic类别模型: {[m.get('model_unique_abbr') for m in models]}")
 
 # Step 3: 获取模型详细信息
 model_info = call_mcp("describe_model", {"model_name": "pitRemove"})["result"]
@@ -197,13 +213,13 @@ print(f"模型详情: {model_info}")
 
 # Step 4: 运行模型
 project_id = call_mcp("run_model", {
-    "request_body": {
+    "request": {
         "model_name": "pitRemove",
         "inputs": {"dem": "/data/dem.tif"},
         "params": {},
         "outputs": {"dem": "/data/dem_filled.tif"}
     }
-})["result"]
+})["result"]["project_id"]
 
 print(f"任务ID: {project_id}")
 ```
@@ -215,9 +231,11 @@ print(f"任务ID: {project_id}")
 1. **参数必填性**: `list_models_by_category` 的 `category` 参数是必填的，必须先调用 `list_categories` 获取可用类别
 2. **模型名称**: 使用 `model_name` (model_unique_abbr) 而不是其他标识符
 3. **认证**: 所有调用都需要有效的 Bearer token
-4. **错误处理**: 检查响应中的错误信息并适当处理
-5. **语言参数**: `lang` 参数可选，支持 `cn`（中文）和 `en`（英文），默认 `en`。无效值回退到 `en`
+4. **错误处理**: 参数错误、模型不存在、上游失败和空结果是不同情况，应分别处理 MCP tool error 与正常结果
+5. **语言参数**: `lang` 参数可选，支持 `cn`（中文）和 `en`（英文），默认 `en`。其他值会在 MCP schema 校验阶段拒绝
 6. **缓存机制**: 系统按 token 和 lang 缓存结果。切换语言时自动刷新缓存，确保返回正确的本地化内容
+7. **严格 schema**: `lang` 仅接受 `en` 或 `cn`；ID 不能为空；`run_model` 的 `inputs` 和 `outputs` 至少各包含一个键。工具 schema 可通过 MCP `tools/list` 获取。
+8. **任务状态与日志**: `get_task_status` 返回 `{project_id, progress, state, message}`；`get_task_log` 返回 `{project_id, entries, next_cursor}`。
 
 ---
 
@@ -226,6 +244,12 @@ print(f"任务ID: {project_id}")
 ### 2026-06-29
 - **新增参数**: `list_categories`、`list_models_by_category`、`describe_model` 增加 `lang` 参数（默认 `en`）
 - **缓存增强**: 缓存现在同时按 token 和 lang 存储，语言切换时自动刷新
+
+### 2026-08-08
+- **schema 收紧**: 新增 Pydantic MCP DTO，`run_model` 使用 `request` 外层对象，字段和返回值不再是无约束字典。
+- **动态参数校验**: `describe_model` 元数据用于提交前校验模型参数名和必填项。
+- **结构化任务结果**: 任务状态、日志和模型提交结果统一为结构化对象。
+- **迁移提示**: 旧客户端需将 `request_body` 改为 `request`，并从 `result.project_id` 读取项目 ID。
 
 ### 2025-06-28
 - **重命名**: `list_models` → `list_models_by_category`

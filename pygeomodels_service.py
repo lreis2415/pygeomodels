@@ -5,6 +5,7 @@ from typing import Optional
 
 import uvicorn
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -147,7 +148,11 @@ if ENABLE_AOI_TOOLS():
     register_aoi_tools(mcp)
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, openWorldHint=False
+    )
+)
 def ready() -> str:
     """
     Confirm the service is ready.

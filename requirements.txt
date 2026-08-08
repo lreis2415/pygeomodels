@@ -6,9 +6,6 @@ numpy>=1.20.0
 # 科学计算库
 scipy>=1.7.0
 
-# GDAL 地理数据处理
-GDAL>=3.0.0
-
 # 地理计算工具 (需要编译 C 扩展)
 pygeoc>=0.2.0
 
@@ -27,3 +24,8 @@ starlette[full]>=0.27.0
 # 其他依赖
 typing-extensions>=4.0.0
 pydantic>=2.0.0
+
+# ---------- 可选依赖 ----------
+# GDAL 地理数据处理（可选）
+# 仅当启用"地形分析工具集"（local_config.ini 中 enable_terrain_analysis_tools=true）时需要。
+# 不安装不影响 MCP 服务的默认启动，以及模型管理(EGC)/AOI 工具的运行。

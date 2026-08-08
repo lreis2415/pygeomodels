@@ -131,21 +131,38 @@ mcp = FastMCP("PyGeoModels")
 
 # 根据开关条件导入地形分析工具集
 if ENABLE_TERRAIN_ANALYSIS_TOOLS():
-    from mcp_service.terrain_analysis_tools import register_terrain_tools
+    try:
+        from mcp_service.terrain_analysis_tools import register_terrain_tools
 
-    register_terrain_tools(mcp)
+        register_terrain_tools(mcp)
+    except ModuleNotFoundError as exc:
+        # GDAL 是可选依赖：未安装时跳过地形工具，给出明确提示而不是崩溃
+        if exc.name != "osgeo":
+            raise
+        logger.warning(
+            "Terrain analysis tools are not loaded because GDAL (optional) is "
+            'not installed. Install it with: pip install "GDAL>=3.0.0"'
+        )
 
 # 根据开关条件导入EGC工具集
 if ENABLE_MODEL_MANAGEMENT_TOOLS():
-    from mcp_service.egc_service_tools import register_model_tools
+    try:
+        from mcp_service.egc_service_tools import register_model_tools
 
-    register_model_tools(mcp)
+        register_model_tools(mcp)
+    except Exception as exc:
+        # 防御性处理：单个工具集导入失败时记录日志，不影响服务启动
+        logger.warning("EGC tools are not loaded due to an import error: %s", exc)
 
 # 根据开关条件导入AOI研究区工具集
 if ENABLE_AOI_TOOLS():
-    from mcp_service.aoi_tools import register_aoi_tools
+    try:
+        from mcp_service.aoi_tools import register_aoi_tools
 
-    register_aoi_tools(mcp)
+        register_aoi_tools(mcp)
+    except Exception as exc:
+        # 防御性处理：单个工具集导入失败时记录日志，不影响服务启动
+        logger.warning("AOI tools are not loaded due to an import error: %s", exc)
 
 
 @mcp.tool(

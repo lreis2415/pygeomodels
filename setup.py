@@ -113,7 +113,11 @@ setup(
         # dependencies). You can install these using the following syntax,
         # for example:
         # $ pip install -e .[dev,test]
-        extras_require={'testing': ['pytest']},
+        extras_require={
+            'testing': ['pytest'],
+            # 地形分析工具（可选）：仅启用 terrain 工具时需要 GDAL
+            'terrain': ['GDAL>=3.0.0'],
+        },
 
         # If there are data files included in your packages that need to be
         # installed, specify them here.  If using Python 2.6 or less, then these

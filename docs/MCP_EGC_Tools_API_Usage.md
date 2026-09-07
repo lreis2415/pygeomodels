@@ -148,19 +148,29 @@ MCP EGC工具的正确使用流程是：
 **参数**:
 - `request` (RunModelRequest, 必填): 任务请求体
   - `model_name` (str): 模型缩写，必填
-  - `inputs` (Dict[str, JSON]): 输入参数，至少一个
+  - `inputs` (Dict[str, str]): 输入参数，至少一个；值必须是 `list_study_areas` 返回的完整绝对路径（不允许相对路径或 `..`）
   - `params` (Dict[str, JSON]): 模型参数，可选
-  - `outputs` (Dict[str, JSON]): 输出参数，至少一个
-  - `task_name` (str): 任务名称，可选
+  - `outputs` (Dict[str, str]): 输出参数，至少一个；值只能是纯文件名，不能包含任何路径分隔符
+  - `task_name` (str): 人类可读的任务标签，可选；服务端会据此生成唯一的下游任务名
 
 `inputs`、`params` 和 `outputs` 的键必须来自 `describe_model` 返回的
-`parameter_info.parameters[].arg_name`。值保持 JSON 类型，以兼容不同 GIS 模型的参数类型；服务端会在提交前依据模型元数据校验参数名和必填项。
+`parameter_info.parameters[].arg_name`。`params` 值保持 JSON 类型，以兼容不同
+GIS 模型的参数类型；服务端会在提交前依据模型元数据校验参数名和必填项。
 
-**返回**: `RunModelResult` - 包含项目 ID：
+**返回**: `RunModelResult` - 包含项目 ID、服务端生成的唯一任务名，以及解析后的输出路径：
 
 ```json
-{"project_id": "proj_12345"}
+{
+  "project_id": "proj_12345",
+  "task_name": "DEM填洼处理-20260907-101530-a1b2c3d4",
+  "resolved_outputs": {
+    "dem": "/onesis/kt4/job_results/DEM填洼处理-20260907-101530-a1b2c3d4--dem_filled.tif"
+  }
+}
 ```
+
+每个输出文件会被服务端解析为 `mcp_output_root/<生成的任务名>--<文件名>`，
+输出目录由服务端配置项 `[SERVICE] mcp_output_root` 决定，客户端无法指定。
 
 **示例**:
 ```json
@@ -174,13 +184,13 @@ MCP EGC工具的正确使用流程是：
       "request": {
         "model_name": "pitRemove",
         "inputs": {
-          "dem": "/path/to/input_dem.tif"
+          "dem": "/onesis/kt4/dsm_case/xuancheng/dem_xc_900913.tif"
         },
         "params": {
           "algorithm": "horn"
         },
         "outputs": {
-          "dem": "/path/to/output_dem.tif"
+          "dem": "output_dem.tif"
         },
         "task_name": "DEM填洼处理"
       }
@@ -229,16 +239,18 @@ model_info = call_mcp("describe_model", {"model_name": "pitRemove"})["result"]
 print(f"模型详情: {model_info}")
 
 # Step 4: 运行模型
-project_id = call_mcp("run_model", {
+run_result = call_mcp("run_model", {
     "request": {
         "model_name": "pitRemove",
         "inputs": {"dem": "/data/dem.tif"},
         "params": {},
-        "outputs": {"dem": "/data/dem_filled.tif"}
+        "outputs": {"dem": "dem_filled.tif"}
     }
-})["result"]["project_id"]
+})["result"]
 
-print(f"任务ID: {project_id}")
+print(f"任务ID: {run_result['project_id']}")
+print(f"任务名: {run_result['task_name']}")
+print(f"输出路径: {run_result['resolved_outputs']}")
 ```
 
 ---
@@ -253,6 +265,7 @@ print(f"任务ID: {project_id}")
 6. **缓存机制**: 系统按 token 和 lang 缓存结果。切换语言时自动刷新缓存，确保返回正确的本地化内容
 7. **严格 schema**: `lang` 仅接受 `en` 或 `cn`；ID 不能为空；`run_model` 的 `inputs` 和 `outputs` 至少各包含一个键。工具 schema 可通过 MCP `tools/list` 获取。
 8. **任务状态与日志**: `get_task_status` 返回 `{project_id, progress, state, message}`；`get_task_log` 返回 `{project_id, entries, next_cursor}`。
+9. **输出路径管理**: `run_model` 的 `outputs` 只接受纯文件名，服务端统一解析到 `mcp_output_root` 下（`<生成的任务名>--<文件名>`），并随 `resolved_outputs` 返回实际路径
 
 ---
 
@@ -274,6 +287,15 @@ print(f"任务ID: {project_id}")
 - **根节点前缀匹配**: v2 catalog 顶层节点 id 带环境后缀（如 `modelbank-dev`），
   按配置的根 id（`modelbank`）做前缀匹配定位。
 - **迁移提示**: 旧客户端从 `result`（字符串数组）改为 `result[].category_id` / `result[].name`。
+
+### 2026-09-07
+- **输出契约收紧**: `run_model` 的 `outputs` 值从完整路径改为纯文件名；服务端生成唯一任务名，
+  并将每个输出解析为 `mcp_output_root/<生成的任务名>--<文件名>`。
+- **输入校验收紧**: `inputs` 值必须是 `list_study_areas` 返回的完整绝对路径（不允许相对路径或 `..`）。
+- **返回值扩展**: `RunModelResult` 新增 `task_name`（服务端生成的唯一任务名）与
+  `resolved_outputs`（解析后的输出路径）。
+- **迁移提示**: 旧客户端需去掉 `outputs` 值中的路径部分、只保留文件名，并改从
+  `result.task_name` / `result.resolved_outputs` 读取任务名与实际输出位置。
 
 ### 2025-06-28
 - **重命名**: `list_models` → `list_models_by_category`

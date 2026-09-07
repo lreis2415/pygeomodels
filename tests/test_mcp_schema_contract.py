@@ -5,9 +5,12 @@ from pydantic import ValidationError
 
 from mcp_service.aoi_tools import register_aoi_tools
 from mcp_service.egc_service_tools import (
+    _generate_task_name,
     _normalize_model_description,
     _normalize_task_log,
     _normalize_task_status,
+    _resolve_output_paths,
+    _validate_input_paths,
     _validate_dynamic_parameters,
     register_model_tools,
 )
@@ -66,6 +69,9 @@ class TestMCPToolSchemaContract(unittest.IsolatedAsyncioTestCase):
         aoi_schema = self.tools["list_study_areas"].output_schema
         self.assertIn("progress", status_schema["properties"])
         self.assertIn("entries", log_schema["properties"])
+        run_schema = self.tools["run_model"].output_schema
+        self.assertIn("task_name", run_schema["properties"])
+        self.assertIn("resolved_outputs", run_schema["properties"])
         self.assertIn("aoiId", aoi_schema["properties"]["result"]["items"]["properties"])
         self.assertEqual(self.tools["run_model"].annotations.readOnlyHint, False)
 
@@ -135,3 +141,57 @@ class TestMCPDTOValidation(unittest.TestCase):
                 RunModelRequest(model_name="demo", inputs={"dem": "in.tif"}, outputs={"out": "out.tif", "x": "x"}),
                 description,
             )
+
+    def test_generated_task_name_is_readable_and_unique(self):
+        first = _generate_task_name("填洼任务", "pitRemove")
+        second = _generate_task_name("填洼任务", "pitRemove")
+
+        self.assertRegex(first, r"^填洼任务-\d{8}-\d{6}-[0-9a-f]{8}$")
+        self.assertNotEqual(first, second)
+
+    def test_outputs_are_resolved_to_unique_files_under_the_configured_root(self):
+        resolved = _resolve_output_paths(
+            {"dem_filled": "filled_dem.tif"},
+            "job_results",
+            "填洼任务-20260831-153045-a7c91e2f",
+        )
+
+        self.assertEqual(
+            resolved["dem_filled"],
+            "job_results/填洼任务-20260831-153045-a7c91e2f--filled_dem.tif",
+        )
+
+    def test_absolute_output_root_is_allowed_but_agent_paths_are_not(self):
+        resolved = _resolve_output_paths(
+            {"dem_filled": "filled_dem.tif"},
+            "/onesis/kt4/job_results",
+            "填洼任务-20260831-153045-a7c91e2f",
+        )
+
+        self.assertEqual(
+            resolved["dem_filled"],
+            "/onesis/kt4/job_results/填洼任务-20260831-153045-a7c91e2f--filled_dem.tif",
+        )
+
+    def test_output_paths_must_be_file_names(self):
+        with self.assertRaisesRegex(ValueError, "must be a file name"):
+            _resolve_output_paths(
+                {"dem_filled": "../other/output.tif"}, "job_results", "task-1"
+            )
+
+    def test_input_paths_validate_shape_and_preserve_backend_paths(self):
+        backend_path = "/onesis/kt4/dsm_case/heshan/dem_heshan_900913.tif"
+        self.assertEqual(
+            _validate_input_paths({"z": backend_path}),
+            {"z": backend_path},
+        )
+        self.assertEqual(
+            _validate_input_paths({"dem": "/tmp/not-present-yet.tif"}),
+            {"dem": "/tmp/not-present-yet.tif"},
+        )
+        with self.assertRaisesRegex(ValueError, "non-empty absolute file path"):
+            _validate_input_paths({"dem": ""})
+        with self.assertRaisesRegex(ValueError, "absolute file path"):
+            _validate_input_paths({"dem": "dem.tif"})
+        with self.assertRaisesRegex(ValueError, "absolute file path"):
+            _validate_input_paths({"dem": "/onesis/kt4/../secret.tif"})

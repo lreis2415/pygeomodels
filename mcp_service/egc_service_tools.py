@@ -1,6 +1,10 @@
 # EGC服务模块
 # 包含GIS模型的查询、运行和状态管理功能
 
+import re
+import secrets
+from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any
 
 from mcp.types import ToolAnnotations
@@ -26,6 +30,73 @@ from mcp_service.schemas import (
 # 全局变量，用于存储配置和模型库
 cfg = None
 mb = None
+_TASK_LABEL_PATTERN = re.compile(r"[^A-Za-z0-9._\-\u4e00-\u9fff]+")
+
+
+def _generate_task_name(task_label: str, model_name: str) -> str:
+    """Create a compact, readable, unique name for one real model submission."""
+    label = _TASK_LABEL_PATTERN.sub("-", task_label.strip()).strip("._-")
+    if not label:
+        label = _TASK_LABEL_PATTERN.sub("-", model_name).strip("._-") or "model"
+    label = label[:96]
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{label}-{timestamp}-{secrets.token_hex(4)}"
+
+
+def _resolve_output_paths(
+    outputs: dict[str, Any], output_root: str, task_name: str
+) -> dict[str, str]:
+    """Resolve output file names into unique files under the configured root."""
+    root = PurePosixPath(output_root)
+    if ".." in root.parts:
+        raise ValueError("mcp_output_root must not contain '..'")
+
+    resolved: dict[str, str] = {}
+    for parameter_name, value in outputs.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"Output {parameter_name} must be a non-empty output file name"
+            )
+        candidate = PurePosixPath(value.strip().replace("\\", "/"))
+        if (
+            candidate.is_absolute()
+            or ".." in candidate.parts
+            or len(candidate.parts) != 1
+        ):
+            raise ValueError(
+                f"Output {parameter_name} must be a file name, not a path"
+            )
+        if candidate.name in {"", ".", ".."}:
+            raise ValueError(f"Output {parameter_name} must be a valid file name")
+        resolved[parameter_name] = str(root / f"{task_name}--{candidate.name}")
+    return resolved
+
+
+def _validate_input_paths(inputs: dict[str, Any]) -> dict[str, str]:
+    """Require every model input to be a valid absolute backend path.
+
+    ``list_study_areas`` returns paths in the ModelManager's storage namespace
+    (for example ``/onesis/kt4/...``). The MCP process may not share that
+    filesystem namespace, so existence must be checked by the downstream
+    ModelManager/Job rather than with a local ``Path.is_file()`` call. This
+    function only validates the path shape and returns it unchanged.
+    """
+    validated: dict[str, str] = {}
+    for parameter_name, value in inputs.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"Input {parameter_name} must be a non-empty absolute file path"
+            )
+
+        input_path = value.strip()
+        posix_path = PurePosixPath(input_path)
+        if not posix_path.is_absolute() or ".." in posix_path.parts:
+            raise ValueError(
+                f"Input {parameter_name} must be an absolute file path returned "
+                "by list_study_areas"
+            )
+        validated[parameter_name] = input_path
+    return validated
 
 
 def _normalize_parameter(raw: dict[str, Any]) -> ModelParameter | None:
@@ -283,13 +354,23 @@ def register_model_tools(mcp):
     )
     def run_model(request: RunModelRequest) -> RunModelResult:
         """
-        提交地理模型任务
+        Submit a geographic model task.
+
+        `task_name` is a human-readable label only. The service creates a unique
+        task name and resolves each output file name to a unique file directly
+        under `mcp_output_root`. Input paths must be complete paths returned by
+        `list_study_areas`; their shape is validated locally and the paths are
+        passed unchanged to the downstream ModelManager.
+
         Args:
             request: Typed task request. Model-specific keys are validated
-                against describe_model metadata before submission.
+                against describe_model metadata before submission. Values in
+                `inputs` must be complete paths returned by `list_study_areas`.
+                Values in `outputs` must be file names, not absolute or relative
+                paths.
 
         Returns:
-            RunModelResult: 项目 ID，用于后续状态查询
+            RunModelResult: Project ID, generated task name, and resolved outputs.
 
         Raises:
             ValueError: 参数验证失败
@@ -298,9 +379,11 @@ def register_model_tools(mcp):
         Example:
             request = {
                 "model_name": "pitRemove",
-                "inputs": {"dem": "/path/to/dem.tif"},
+                "inputs": {
+                    "dem": "/onesis/kt4/dsm_case/xuancheng/dem_xc_900913.tif"
+                },
                 "params": {"algorithm": "horn"},
-                "outputs": {"dem": "/path/to/dem_filled.tif"},
+                "outputs": {"dem": "dem_filled.tif"},
                 "task_name": "填洼任务"
             }
         """
@@ -314,8 +397,19 @@ def register_model_tools(mcp):
             request.model_name, description
         )
         _validate_dynamic_parameters(request, normalized_description)
+        validated_inputs = _validate_input_paths(request.inputs)
+
+        generated_task_name = _generate_task_name(
+            request.task_name, request.model_name
+        )
+        resolved_outputs = _resolve_output_paths(
+            request.outputs, cfg.mcp_output_root, generated_task_name
+        )
 
         request_body = request.model_dump()
+        request_body["inputs"] = validated_inputs
+        request_body["task_name"] = generated_task_name
+        request_body["outputs"] = resolved_outputs
         request_body["access_token"] = access_token
 
         # Initialize/Get model caller with current token
@@ -329,7 +423,11 @@ def register_model_tools(mcp):
         project_id = model_function(request_body)
         if not project_id:
             raise RuntimeError("Model submission did not return a project_id")
-        return RunModelResult(project_id=str(project_id))
+        return RunModelResult(
+            project_id=str(project_id),
+            task_name=generated_task_name,
+            resolved_outputs=resolved_outputs,
+        )
 
     @mcp.tool(
         annotations=ToolAnnotations(

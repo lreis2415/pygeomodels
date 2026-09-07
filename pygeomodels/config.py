@@ -213,6 +213,14 @@ class ModelEngineConfig(object):
         self.aoi_list_data_path = get_option_value(
             cf, service, "aoi_list_data_path", valtyp=str, defvalue="", required=False
         )
+        self.mcp_output_root = get_option_value(
+            cf,
+            service,
+            "mcp_output_root",
+            valtyp=str,
+            defvalue="job_results",
+            required=False,
+        )
 
         # Feature flags related
         feature_flags = "FEATURE_FLAGS"

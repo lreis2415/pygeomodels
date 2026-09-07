@@ -21,12 +21,15 @@ def restapi_post(
     method: str,
     body: dict[str, Any],
     access_token: Optional[str] = None,
+    raise_on_error: bool = False,
 ) -> Optional[dict[str, Any]]:
     try:
         return call_inner_api(
             "POST", host, method, json_body=body, access_token=access_token
         )
     except Exception:
+        if raise_on_error:
+            raise
         print("POST API (%s/%s) failed!" % (host, method))
         return None
 

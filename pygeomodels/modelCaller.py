@@ -1,8 +1,73 @@
-from typing import Any, Dict, Optional, Callable
+import re
+from typing import Any, Callable, Dict, Optional
+
+import httpx
 
 from pygeomodels.config import ModelEngineConfig
 from pygeomodels.api import restapi_post
 from pygeomodels.utils import generate_uniqueid
+
+
+class ModelSubmissionError(RuntimeError):
+    """A safe, actionable failure returned while starting a model task."""
+
+    _MAX_CODE_LENGTH = 128
+    _MAX_MESSAGE_LENGTH = 500
+    _BEARER_TOKEN_PATTERN = re.compile(r"(?i)(bearer\s+)[^\s,;]+")
+    _ACCESS_TOKEN_PATTERN = re.compile(
+        r"(?i)(access_token\s*[=:]\s*[\"']?)[^\s,;\"']+"
+    )
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        status_code: Optional[int] = None,
+        success: Optional[bool] = None,
+        code: Optional[object] = None,
+        backend_message: Optional[object] = None,
+    ):
+        self.reason = reason
+        self.status_code = status_code
+        self.success = success
+        self.code = self._bounded_text(code, self._MAX_CODE_LENGTH)
+        self.backend_message = self._bounded_text(
+            backend_message, self._MAX_MESSAGE_LENGTH
+        )
+
+        details = []
+        if status_code is not None:
+            details.append(f"status_code={status_code}")
+        if success is not None:
+            details.append(f"success={success}")
+        if self.code:
+            details.append(f"code={self.code}")
+        if self.backend_message:
+            details.append(f"message={self.backend_message}")
+        detail_text = f" ({', '.join(details)})" if details else ""
+        super().__init__(f"Model submission failed: {reason}{detail_text}")
+
+    @staticmethod
+    def _bounded_text(value: Optional[object], maximum: int) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        text = ModelSubmissionError._BEARER_TOKEN_PATTERN.sub(
+            r"\1[REDACTED]", text
+        )
+        text = ModelSubmissionError._ACCESS_TOKEN_PATTERN.sub(
+            r"\1[REDACTED]", text
+        )
+        return text[:maximum] if text else None
+
+
+def _parse_success(value: object) -> Optional[bool]:
+    """Return a normalized backend success flag, or None when malformed."""
+    if value is True or value == "true":
+        return True
+    if value is False or value == "false":
+        return False
+    return None
 
 
 class ModelCaller:
@@ -65,16 +130,65 @@ class ModelCaller:
                         post_body["params"].append(
                             {"param_name": ok, "param_value": ov}
                         )
-                    res = restapi_post(
-                        self.cfg.modelmanager_url,
-                        method,
-                        post_body,
-                        str(_access_token).strip(),
-                    )
-                    if res is None:
-                        return None
-                    if res["success"] == "true" or res["success"]:
-                        return res["data"]["project_id"]
+                    try:
+                        res = restapi_post(
+                            self.cfg.modelmanager_url,
+                            method,
+                            post_body,
+                            str(_access_token).strip(),
+                            raise_on_error=True,
+                        )
+                    except httpx.HTTPStatusError as exc:
+                        raise ModelSubmissionError(
+                            "downstream service returned an HTTP error",
+                            status_code=exc.response.status_code,
+                        ) from exc
+                    except httpx.RequestError as exc:
+                        raise ModelSubmissionError(
+                            "downstream service request failed"
+                        ) from exc
+                    except ValueError as exc:
+                        raise ModelSubmissionError(
+                            "downstream service returned invalid JSON"
+                        ) from exc
+
+                    if not isinstance(res, dict):
+                        raise ModelSubmissionError(
+                            "downstream service returned a non-object response"
+                        )
+
+                    success = _parse_success(res.get("success"))
+                    if success is None:
+                        raise ModelSubmissionError(
+                            "downstream service returned an invalid success flag",
+                            code=res.get("code"),
+                            backend_message=res.get("message"),
+                        )
+                    if not success:
+                        raise ModelSubmissionError(
+                            "downstream service rejected the submission",
+                            success=False,
+                            code=res.get("code"),
+                            backend_message=res.get("message"),
+                        )
+
+                    data = res.get("data")
+                    if not isinstance(data, dict):
+                        raise ModelSubmissionError(
+                            "downstream service returned invalid submission data",
+                            success=True,
+                            code=res.get("code"),
+                            backend_message=res.get("message"),
+                        )
+                    project_id = data.get("project_id")
+                    if not isinstance(project_id, str) or not project_id.strip():
+                        raise ModelSubmissionError(
+                            "downstream service response omitted project_id",
+                            success=True,
+                            code=res.get("code"),
+                            backend_message=res.get("message"),
+                        )
+                    return project_id.strip()
 
                 return model_function
 
